@@ -4,9 +4,17 @@ import { storage } from "./storage";
 import OpenAI from "openai";
 import { z } from "zod";
 import { insertSavedItemSchema, insertOpenaiRequestSchema } from "@shared/schema";
+import { log } from "./vite";
 
 // OpenAI setup
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "sk-dummy-key-for-development" });
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// Check if API key exists
+if (!process.env.OPENAI_API_KEY) {
+  log("WARNING: OpenAI API key is not set. AI features will not work.", "openai");
+}
 
 // Input validation schemas
 const faithSchema = z.enum(["buddhism", "christianity", "hinduism", "islam", "judaism", "secular"]);
@@ -58,10 +66,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         response_format: { type: "json_object" }
       });
 
-      const result = JSON.parse(response.choices[0].message.content);
+      const result = response.choices[0].message.content ? JSON.parse(response.choices[0].message.content) : {};
       
       // Store the request in history (if user is logged in)
-      const userId = req.session?.userId;
+      const userId = (req as any).session?.userId;
       if (userId) {
         await storage.createOpenaiRequest({
           userId,
@@ -73,9 +81,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.json(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in daily blessing endpoint:", error);
-      res.status(500).json({ error: "Failed to generate blessing" });
+      
+      // Check for API key issues
+      if (error.message && error.message.includes("API key")) {
+        res.status(401).json({ error: "OpenAI API key error. Please check your API key configuration." });
+      } else {
+        res.status(500).json({ error: "Failed to generate blessing" });
+      }
     }
   });
 
@@ -111,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         
         try {
-          const parsedResponse = JSON.parse(response.choices[0].message.content);
+          const parsedResponse = response.choices[0].message.content ? JSON.parse(response.choices[0].message.content) : {};
           result = {
             answer: parsedResponse.answer || parsedResponse.mainAnswer || parsedResponse.response,
             perspectives: parsedResponse.perspectives || parsedResponse.comparisons || {}
@@ -119,18 +133,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (e) {
           // Fallback to text response if JSON parsing fails
           result = {
-            answer: response.choices[0].message.content,
+            answer: response.choices[0].message.content || '',
             perspectives: {}
           };
         }
       } else {
         result = {
-          answer: response.choices[0].message.content
+          answer: response.choices[0].message.content || ''
         };
       }
       
       // Store the request in history (if user is logged in)
-      const userId = req.session?.userId;
+      const userId = (req as any).session?.userId;
       if (userId) {
         await storage.createOpenaiRequest({
           userId,
@@ -142,9 +156,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.json(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in question endpoint:", error);
-      res.status(500).json({ error: "Failed to answer question" });
+      
+      // Check for API key issues
+      if (error.message && error.message.includes("API key")) {
+        res.status(401).json({ error: "OpenAI API key error. Please check your API key configuration." });
+      } else {
+        res.status(500).json({ error: "Failed to answer question" });
+      }
     }
   });
 
@@ -174,10 +194,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         response_format: { type: "json_object" }
       });
 
-      const result = JSON.parse(response.choices[0].message.content);
+      const result = response.choices[0].message.content ? JSON.parse(response.choices[0].message.content) : {};
       
       // Store the request in history (if user is logged in)
-      const userId = req.session?.userId;
+      const userId = (req as any).session?.userId;
       if (userId) {
         await storage.createOpenaiRequest({
           userId,
@@ -189,16 +209,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.json(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in scripture endpoint:", error);
-      res.status(500).json({ error: "Failed to retrieve scripture" });
+      
+      // Check for API key issues
+      if (error.message && error.message.includes("API key")) {
+        res.status(401).json({ error: "OpenAI API key error. Please check your API key configuration." });
+      } else {
+        res.status(500).json({ error: "Failed to retrieve scripture" });
+      }
     }
   });
 
   // Save item API
   app.post("/api/saved-items", async (req: Request, res: Response) => {
     try {
-      const userId = req.session?.userId;
+      const userId = (req as any).session?.userId;
       if (!userId) {
         return res.status(401).json({ error: "User not authenticated" });
       }
@@ -219,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get saved items API
   app.get("/api/saved-items", async (req: Request, res: Response) => {
     try {
-      const userId = req.session?.userId;
+      const userId = (req as any).session?.userId;
       if (!userId) {
         return res.status(401).json({ error: "User not authenticated" });
       }
@@ -235,7 +261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete saved item API
   app.delete("/api/saved-items/:id", async (req: Request, res: Response) => {
     try {
-      const userId = req.session?.userId;
+      const userId = (req as any).session?.userId;
       if (!userId) {
         return res.status(401).json({ error: "User not authenticated" });
       }

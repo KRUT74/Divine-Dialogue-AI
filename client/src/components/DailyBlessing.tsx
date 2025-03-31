@@ -21,9 +21,14 @@ export default function DailyBlessing() {
         setError(null);
         const data = await getDailyBlessing(currentFaith, language);
         setBlessing(data);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching daily blessing:", err);
-        setError("Failed to load daily blessing. Please try again later.");
+        // Provide more specific error messages based on error type
+        if (err.message && err.message.includes("API key")) {
+          setError("OpenAI API key error. Please check your API key configuration.");
+        } else {
+          setError("Failed to load daily blessing. Please try again later.");
+        }
       } finally {
         setLoading(false);
       }

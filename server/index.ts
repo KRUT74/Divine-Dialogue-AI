@@ -2,6 +2,11 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// Check for OpenAI API key
+if (!process.env.OPENAI_API_KEY) {
+  log("WARNING: OPENAI_API_KEY is not set. AI features will not work properly.", "server");
+}
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -42,9 +47,23 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
+    
+    // Log the complete error for debugging
+    log(`ERROR: ${message}`, "server-error");
+    if (err.stack) {
+      log(`ERROR STACK: ${err.stack}`, "server-error");
+    }
+    
+    // Check for OpenAI API key errors
+    if (message.includes("API key") || message.includes("authentication")) {
+      return res.status(401).json({ 
+        message: "OpenAI API key error. Please check your API key configuration." 
+      });
+    }
+    
     res.status(status).json({ message });
-    throw err;
+    // Don't throw the error as it will crash the server
+    // throw err;
   });
 
   // importantly only setup vite in development and after
@@ -66,5 +85,10 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    if (!process.env.OPENAI_API_KEY) {
+      log("⚠️ OPENAI_API_KEY is missing or invalid. AI features will not work properly.");
+      log("Please set the OPENAI_API_KEY environment variable with a valid API key.");
+    }
   });
 })();
