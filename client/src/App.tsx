@@ -19,12 +19,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SavedItemsProvider>
-        <FaithProvider>
+      <FaithProvider>
+        <SavedItemsProvider>
           <Router />
           <Toaster />
-        </FaithProvider>
-      </SavedItemsProvider>
+        </SavedItemsProvider>
+      </FaithProvider>
     </QueryClientProvider>
   );
 }

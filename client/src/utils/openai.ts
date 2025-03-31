@@ -13,7 +13,8 @@ export async function getDailyBlessing(faith: Faith, language: Language): Promis
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to get daily blessing: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to get daily blessing: ${response.statusText}`);
   }
 
   return await response.json();
@@ -34,7 +35,8 @@ export async function getQAResponse(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to get Q&A response: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to get Q&A response: ${response.statusText}`);
   }
 
   return await response.json();
@@ -55,7 +57,8 @@ export async function getScripturePassage(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to get scripture passage: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to get scripture passage: ${response.statusText}`);
   }
 
   return await response.json();
