@@ -1,0 +1,102 @@
+Here’s your **enhanced V0 prompt** for the **"SacredText"** app, integrating all your requirements while maintaining elegance and technical feasibility. I’ve structured it for clarity, scalability, and a premium user experience.
+
+---
+
+### **V0 Prompt: "SacredText" – AI-Powered Interfaith Companion**  
+*A dynamic LLM app offering virtual guides, daily blessings, cross-religious dialogue, and multilingual access—rooted in respect and modern design.*  
+
+---
+
+### **1. Core Features**  
+#### **A. Virtual Guides (AI Avatars)**  
+- **Role**: Digital representatives of each faith (e.g., a *Buddhist monk*, *Christian pastor*, *Islamic scholar*).  
+- **Capabilities**:  
+  - Teachings: Deliver scripture excerpts (e.g., *"Matthew 5:9"* → *"Blessed are the peacemakers..."*).  
+  - Historical Context: Explain origins (e.g., *"The Five Pillars of Islam emerged in 7th-century Arabia..."*).  
+  - Interpretations: Offer scholarly perspectives (e.g., *"Kabbalistic views on forgiveness"*).  
+- **Design**:  
+  - **Icons**: Minimalist line-art avatars (e.g., a lotus for Buddhism, cross for Christianity).  
+  - **Color-Coded**: Matches faith’s palette (see table below).  
+
+#### **B. Daily Blessings & Inspirations**  
+- **Input**: User selects faith + focus (e.g., *"Gratitude"*, *"Justice"*).  
+- **Output**:  
+  - *"Hinduism: ‘Offer your actions to the Divine, as Krishna teaches in the Gita (3:30). Today, practice seeing work as worship.’"*  
+  - Firebase stores a history for reflection.  
+
+#### **C. Interactive Q&A Sessions**  
+- **Examples**:  
+  - *"How does Judaism view forgiveness?"* → Answers with Talmudic + modern rabbinic insights.  
+  - *"What’s the Buddhist take on climate change?"* → Links to *engaged Buddhism* principles.  
+- **Safety**: LangChain filters doctrinal conflicts unless *"Comparative Mode"* is on.  
+
+#### **D. Interpretation Button**  
+- **Feature**: After a teaching, click *"Compare Perspectives"* → Shows parallels (e.g., *Christian "love thy neighbor" vs. Buddhist "metta"*).  
+- **UI**: Expandable accordion to avoid clutter.  
+
+#### **E. Multi-Language Support**  
+- **Initial Languages**: English, Spanish, Arabic, Hindi.  
+- **Toggle**: Language dropdown (flags optional).  
+- **Tech**: OpenAI’s translation API + LangChain to preserve doctrinal nuance.  
+
+---
+
+### **2. Style & Design**  
+#### **Faith-Specific Branding**  
+| **Faith**       | **Primary Color** (Tailwind) | **Accent**  | **Avatar Icon** | **Typical Greeting**          |  
+|-----------------|-----------------------------|-------------|-----------------|-------------------------------|  
+| **Christianity**  | `bg-indigo-900`             | Gold        | ✝              | *"Grace and peace to you."*   |  
+| **Islam**        | `bg-green-900`              | Cream       | ☪              | *"As-salamu alaykum."*        |  
+| **Buddhism**     | `bg-stone-800`              | Saffron     | ☸              | *"May you be free from suffering."* |  
+| **Hinduism**     | `bg-purple-900`             | Turquoise   | ॐ               | *"Namaste. All is Divine."*   |  
+| **Judaism**      | `bg-blue-900`               | Silver      | ✡              | *"Shalom. Walk in light."*    |  
+| **Secular**      | `bg-slate-800`              | Teal        | ∞              | *"Reflect with intention."*   |  
+
+#### **UI Elements**  
+- **Fonts**:  
+  - *EB Garamond* for scriptures/quotes.  
+  - *Inter* for UI (clean readability).  
+- **Animations**:  
+  - Gentle fade-in for blessings (like dawn light).  
+  - "Candle flicker" effect during prayer generation.  
+- **Layout**:  
+  - **Left Sidebar**: Faith selection + saved items.  
+  - **Main Panel**: Q&A / blessings with *"Interpretation"* button.  
+
+---
+
+### **3. Example User Flow**  
+1. **Select Faith**: Buddhism (☸, `bg-stone-800` theme).  
+2. **Daily Blessing**:  
+   - *"Today: Reflect on impermanence. As the Dhammapada says, ‘All conditioned things are transient.’"*  
+3. **Q&A**:  
+   - User: *"How to handle anger mindfully?"*  
+   - AI: *"The Buddha taught..."* → *"Compare"* button → *"Similar to Stoic ‘amor fati’ or Christian ‘turn the other cheek.’"*  
+4. **Save**: Click bookmark → Stores to Firebase under *"Mindfulness"*.  
+
+---
+
+### **4. Tech Stack**  
+- **AI**: OpenAI (GPT-4) + LangChain for:  
+  - **Doctrine Guardrails**: Prevents mixing unless comparative mode.  
+  - **Translation**: Preserves nuance across languages.  
+- **Backend**:  
+  - Firebase Firestore: Saves blessings/Q&A history.  
+  - Auth: Optional (email/anonymous).  
+- **UI**: Vercel + Next.js, with:  
+  - Dynamic theming (CSS variables switch palettes).  
+  - Dark mode default (reduces eye strain).  
+
+---
+
+### **5. Why This Stands Out**  
+- **Depth**: Virtual guides feel personalized, not generic.  
+- **Unity**: *"Interpretation"* button fosters interfaith respect.  
+- **Global**: Multilingual from Day 1.  
+
+**Next Steps:**  
+1. Build **faith toggle + 1 guide (e.g., Buddhism)** as MVP.  
+2. Use Firebase’s free tier for saves.  
+3. Later: Add **voice narration** (AWS Polly with reverential tones).  
+
+Want a **"Community Prayers"** feature (user-submitted)? Or keep it solo-focused for now?
