@@ -21,7 +21,7 @@ export const ScriptureRequest = z.object({
 })
 
 export const Blessing = z.object({
-  theme: z.string().describe("Two to four words naming today's theme, e.g. 'Patience in difficulty'"),
+  theme: z.string().describe("Two to four words naming today's theme, in the visitor's language"),
   quote: z.string().describe("A short, well-known passage, quoted only if you are sure of the wording"),
   source: z.string().describe("Precise reference for the quote, e.g. 'Dhammapada 5'"),
   reflection: z.string().describe("Two or three sentences applying the passage to daily life"),
