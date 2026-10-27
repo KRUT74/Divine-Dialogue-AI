@@ -3,14 +3,101 @@
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-garamond), ui-serif, Georgia, serif;
+
+  /* "Illuminated page": ivory paper, ink and gold. Night values are below. */
+  --color-paper: var(--paper);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-gold: var(--gold);
+  --color-gold-text: var(--gold-text);
+  --color-danger: var(--danger);
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
+  --paper: #f7f2e7;
+  --raised: #fbf8f1;
+  --ink: #1f1a14;
+  --muted: #6b6153;
+  --line: #e3d9c5;
+  /* Decorative gold for rules and ornaments; gold-text passes contrast for words. */
+  --gold: #a8802f;
+  --gold-text: #8a6620;
+  --danger: #9b2c2c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #17130f;
+    --raised: #211c16;
+    --ink: #efe6d4;
+    --muted: #b3a895;
+    --line: #3a3127;
+    --gold: #d4b26a;
+    --gold-text: #d4b26a;
+    --danger: #f19a9a;
+  }
+}
+
+/* Each tradition's ink colour, set per element by faithStyle() in ui.tsx. */
+.faith-theme {
+  --accent: var(--faith-day);
+}
+@media (prefers-color-scheme: dark) {
+  .faith-theme {
+    --accent: var(--faith-night);
+  }
 }
 
 body {
-  @apply bg-slate-900 font-sans text-white antialiased;
+  @apply bg-paper font-sans text-ink antialiased;
+  /* A faint warm vignette, like light falling on a page. */
+  background-image: radial-gradient(ellipse at top, color-mix(in srgb, var(--gold) 9%, transparent), transparent 60%);
+  background-attachment: fixed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent, var(--gold));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--gold) 30%, transparent);
+}
+
+/* References in small capitals, like a printed footnote. */
+.small-caps {
+  font-family: var(--font-serif);
+  font-variant: all-small-caps;
+  letter-spacing: 0.08em;
+}
+
+/* A thin gold rule with a diamond in the middle. */
+.ornament-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--gold);
+}
+.ornament-rule::before,
+.ornament-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* Decorative first letter for the daily reflection. */
+.drop-cap::first-letter {
+  float: left;
+  margin: 0.1em 0.12em 0 0;
+  font-family: var(--font-serif);
+  font-size: 3.4em;
+  line-height: 0.8;
+  color: var(--accent);
 }
 
 /* Model answers are Markdown; give the rendered elements readable spacing. */
@@ -31,27 +118,65 @@ body {
   font-weight: 600;
 }
 .prose-guide strong {
-  color: var(--accent);
+  font-weight: 600;
 }
 .prose-guide blockquote {
-  border-left: 3px solid var(--accent);
+  border-left: 2px solid var(--gold);
   padding-left: 1em;
   font-style: italic;
 }
+.prose-guide a:not(.citation-marker) {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Footnote numerals in the reply, linking to the passage below. */
 .citation-marker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.4em;
-  margin: 0 0.15em;
-  padding: 0 0.3em;
-  border-radius: 0.4em;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  margin: 0 0.1em;
   color: var(--accent);
   font-family: var(--font-sans);
-  font-size: 0.7em;
+  font-size: 0.68em;
   font-weight: 600;
   vertical-align: super;
-  line-height: 1.4;
+  line-height: 1;
   text-decoration: none;
+}
+.citation-marker:hover {
+  text-decoration: underline;
+}
+
+/* A slow breathing ring for the voice orb; still under reduced motion. */
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.15;
+  }
+}
+.breathe {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+@keyframes dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.typing-dot {
+  animation: dot 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .breathe,
+  .typing-dot {
+    animation: none;
+  }
 }

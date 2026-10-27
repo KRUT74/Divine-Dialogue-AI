@@ -1,6 +1,5 @@
 "use client"
 
-import { Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import type { Blessing } from "@/lib/schemas"
 import { fetchBlessing } from "../lib/api"
@@ -27,14 +26,16 @@ export function DailyBlessing() {
   }, [faith, language, attempt])
 
   return (
-    <Section icon={Sun} title="Today's Blessing">
+    <Section title="Today's Blessing" eyebrow="A passage for the day">
       {status.state === "loading" && <Loading label="Loading today's blessing" />}
       {status.state === "error" && <ErrorMessage message={status.message} onRetry={() => setAttempt((n) => n + 1)} />}
       {status.state === "ready" && (
-        <div>
-          <p className="mb-3 text-sm tracking-wide text-slate-400 uppercase">{status.blessing.theme}</p>
-          <Quote citation={status.blessing.passage} large />
-          <p className="mt-4 text-slate-300">{status.blessing.reflection}</p>
+        <div className="text-center">
+          <p className="small-caps mb-8 text-base text-(--accent)">{status.blessing.theme}</p>
+          <Quote citation={status.blessing.passage} />
+          <p className="drop-cap mx-auto mt-10 max-w-xl text-left font-serif text-xl leading-relaxed text-ink/90">
+            {status.blessing.reflection}
+          </p>
           <SaveButton
             key={status.blessing.passage.reference}
             onSave={() =>

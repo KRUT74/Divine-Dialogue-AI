@@ -1,55 +1,61 @@
 "use client"
 
-import { Bookmark, BookmarkCheck, ExternalLink, type LucideIcon } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import { Bookmark, BookmarkCheck, ArrowUpRight } from "lucide-react"
+import { useState, type CSSProperties, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
+import { FAITH_INFO, type Faith } from "@/lib/faiths"
 import type { Citation } from "@/lib/schemas"
 import { cn } from "@/lib/utils"
 
-export function Section({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
+/** Sets --accent to a tradition's ink colour, for day and night. Use with the faith-theme class. */
+export function faithStyle(faith: Faith): CSSProperties {
+  const info = FAITH_INFO[faith]
+  return { "--faith-day": info.color, "--faith-night": info.nightColor } as CSSProperties
+}
+
+/** A section of the page, introduced by a gold ornament and a serif title. */
+export function Section({ title, eyebrow, children }: { title: string; eyebrow?: string; children: ReactNode }) {
   const id = `section-${title.toLowerCase().replace(/\s+/g, "-")}`
   return (
-    <section aria-labelledby={id} className="mb-8">
-      <h2 id={id} className="mb-4 flex items-center gap-2 text-xl font-medium text-(--accent)">
-        <Icon aria-hidden className="size-5" />
-        {title}
-      </h2>
-      <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-lg">{children}</div>
+    <section aria-labelledby={id} className="mt-16">
+      <div aria-hidden className="ornament-rule mb-6 text-sm">
+        ✦
+      </div>
+      <header className="mb-6 text-center">
+        {eyebrow && <p className="small-caps mb-1 text-sm text-muted">{eyebrow}</p>}
+        <h2 id={id} className="font-serif text-3xl text-ink">
+          {title}
+        </h2>
+      </header>
+      {children}
     </section>
   )
 }
 
 export function Loading({ label }: { label: string }) {
   return (
-    <div role="status" className="flex justify-center py-8">
-      <div aria-hidden className="size-10 animate-pulse rounded-full bg-(--accent)" />
-      <span className="sr-only">{label}</span>
+    <div role="status" className="flex items-center gap-1.5 py-4 text-(--accent)">
+      {[0, 1, 2].map((i) => (
+        <span key={i} aria-hidden className="typing-dot size-1.5 rounded-full bg-current" style={{ animationDelay: `${i * 0.2}s` }} />
+      ))}
+      <span className="ml-2 font-serif text-base text-muted italic">{label}…</span>
     </div>
   )
 }
 
 export function ErrorMessage({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div role="alert" className="py-6 text-center text-red-300">
-      <p>{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-3 rounded bg-slate-700 px-4 py-2 text-white hover:bg-slate-600"
-      >
+    <div role="alert" className="py-4 text-center">
+      <p className="font-serif text-lg text-danger">{message}</p>
+      <button type="button" onClick={onRetry} className="mt-3 rounded-full border border-line px-4 py-1.5 text-sm hover:border-(--accent)">
         Try again
       </button>
     </div>
   )
 }
 
-export function Placeholder({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
-  return (
-    <div className="py-8 text-center text-slate-400">
-      <Icon aria-hidden className="mx-auto mb-2 size-9" />
-      <p>{children}</p>
-    </div>
-  )
+export function Placeholder({ children }: { children: ReactNode }) {
+  return <p className="py-4 text-center font-serif text-lg text-muted italic">{children}</p>
 }
 
 /** Saves once, then shows that it's saved so a second click can't duplicate the item. */
@@ -65,8 +71,8 @@ export function SaveButton({ onSave }: { onSave: () => void }) {
         setSaved(true)
       }}
       className={cn(
-        "mt-6 flex items-center gap-1 rounded-full bg-(--primary) px-4 py-2 text-sm",
-        saved ? "opacity-80" : "hover:brightness-125",
+        "mt-4 inline-flex items-center gap-1.5 text-sm text-muted",
+        saved ? "text-(--accent)" : "hover:text-(--accent)",
       )}
     >
       <Icon aria-hidden className="size-4" />
@@ -77,15 +83,15 @@ export function SaveButton({ onSave }: { onSave: () => void }) {
 
 /**
  * Renders model output as Markdown (raw HTML is not rendered). Citation markers
- * like [1] become links to the matching card in CitationList.
+ * like [1] become footnote links to the matching passage in CitationList.
  */
-export function Markdown({ children, citations = [], anchor = "" }: { children: string; citations?: Citation[]; anchor?: string }) {
+export function Markdown({ children, citations = [], anchor = "", className }: { children: string; citations?: Citation[]; anchor?: string; className?: string }) {
   const ids = new Set(citations.map((c) => c.id))
   const text = children.replace(/\[(\d+)\]/g, (marker, id: string) =>
     ids.has(Number(id)) ? `[${id}](#${anchor}-cite-${id})` : marker,
   )
   return (
-    <div className="prose-guide font-serif text-lg leading-relaxed text-white">
+    <div className={cn("prose-guide font-serif text-xl leading-relaxed text-ink", className)}>
       <ReactMarkdown
         components={{
           a: ({ href, children: label }) =>
@@ -106,37 +112,55 @@ export function Markdown({ children, citations = [], anchor = "" }: { children: 
   )
 }
 
-/** The verified passages a reply quoted, each linking to its source. */
+/** The verified passages a reply quoted, set as footnotes, each linking to its source. */
 export function CitationList({ citations, anchor, text }: { citations: Citation[]; anchor: string; text: string }) {
   // Only passages the reply actually quotes; the guide may look up more than it uses.
   const quoted = citations.filter((citation) => text.includes(`[${citation.id}]`))
   if (!quoted.length) return null
   return (
-    <ol className="mt-4 space-y-2" aria-label="Sources">
+    <ol className="mt-5 space-y-3 border-t border-line pt-4" aria-label="Sources">
       {quoted.map((citation) => (
-        <li key={citation.id} id={`${anchor}-cite-${citation.id}`} className="scroll-mt-24">
-          <Quote citation={citation} number={citation.id} />
+        <li key={citation.id} id={`${anchor}-cite-${citation.id}`} className="flex scroll-mt-24 gap-3">
+          <span className="w-4 shrink-0 pt-0.5 text-right text-sm font-semibold text-(--accent)">{citation.id}</span>
+          <div className="min-w-0">
+            <p className="font-serif text-lg leading-snug text-ink">“{citation.text}”</p>
+            <Reference citation={citation} />
+          </div>
         </li>
       ))}
     </ol>
   )
 }
 
-/** A passage exactly as the source gives it, with its reference and translation. */
-export function Quote({ citation, number, large = false }: { citation: Citation; number?: number; large?: boolean }) {
+function Reference({ citation, centered = false }: { citation: Citation; centered?: boolean }) {
   return (
-    <figure className="rounded-lg border-l-4 border-(--accent) bg-slate-900/60 px-4 py-3">
-      <blockquote className={cn("font-serif text-slate-100", large ? "text-xl leading-relaxed" : "text-base")}>
-        {number !== undefined && <span className="mr-2 text-sm text-(--accent)">[{number}]</span>}“{citation.text}”
-      </blockquote>
-      <figcaption className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-slate-400">
-        <a href={citation.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-slate-200 underline-offset-2 hover:underline">
-          {citation.reference}
-          <ExternalLink aria-hidden className="size-3.5" />
-          <span className="sr-only">(opens in a new tab)</span>
-        </a>
-        <span aria-hidden>·</span>
-        <span>{citation.translation}</span>
+    <p className={cn("mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-muted", centered && "justify-center")}>
+      <a
+        href={citation.url}
+        target="_blank"
+        rel="noreferrer"
+        className="small-caps inline-flex items-center gap-0.5 text-base text-(--accent) underline-offset-2 hover:underline"
+      >
+        {citation.reference}
+        <ArrowUpRight aria-hidden className="size-3.5" />
+        <span className="sr-only">(opens in a new tab)</span>
+      </a>
+      <span className="font-serif italic">{citation.translation}</span>
+    </p>
+  )
+}
+
+/** A passage set like a printed page: hanging quotation mark, centred, with its reference beneath. */
+export function Quote({ citation }: { citation: Citation }) {
+  return (
+    <figure className="relative mx-auto max-w-xl px-6 text-center">
+      <span aria-hidden className="absolute -top-6 left-0 font-serif text-7xl leading-none text-gold opacity-60">
+        “
+      </span>
+      <blockquote className="font-serif text-2xl leading-snug text-ink sm:text-[1.7rem]">{citation.text}</blockquote>
+      <figcaption className="mt-4">
+        <span aria-hidden className="mx-auto mb-3 block h-px w-12 bg-gold" />
+        <Reference citation={citation} centered />
       </figcaption>
     </figure>
   )

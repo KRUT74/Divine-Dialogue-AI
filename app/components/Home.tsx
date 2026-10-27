@@ -1,12 +1,12 @@
 "use client"
 
-import type { CSSProperties } from "react"
 import { FAITH_INFO } from "@/lib/faiths"
 import { AppStateProvider, useAppState } from "../lib/state"
 import { Chat } from "./Chat"
 import { DailyBlessing } from "./DailyBlessing"
+import { Header } from "./Header"
 import { ScriptureLookup } from "./ScriptureLookup"
-import { Brand, FaithPicker, LanguagePicker, SavedItems, Sidebar } from "./Sidebar"
+import { faithStyle } from "./ui"
 
 export function Home() {
   return (
@@ -19,36 +19,26 @@ export function Home() {
 function Shell() {
   const { faith } = useAppState()
   const info = FAITH_INFO[faith]
-  const theme = { "--accent": info.accentColor, "--primary": info.primaryColor } as CSSProperties
 
   return (
-    <div style={theme} className="flex min-h-dvh">
-      <Sidebar />
-      <div className="min-w-0 flex-1">
-        <header className="border-b border-slate-700 bg-slate-800 p-4 md:hidden">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <Brand />
-            <LanguagePicker />
-          </div>
-          <FaithPicker layout="row" />
-        </header>
-        <main className="mx-auto max-w-4xl p-4 md:p-8">
-          <div className="mb-8">
-            <h1 className="text-2xl font-medium text-(--accent)">{info.name}</h1>
-            <p className="text-slate-400">{info.greeting}</p>
-          </div>
-          <Chat />
-          <DailyBlessing />
-          <ScriptureLookup />
-          <div className="md:hidden">
-            <SavedItems />
-          </div>
-          <p className="mt-12 text-center text-xs text-slate-500">
-            Divine Dialogue is an AI guide, not a religious authority. Answers can contain mistakes. If you are in
-            crisis, please contact your local emergency services.
+    <div style={faithStyle(faith)} className="faith-theme min-h-dvh">
+      <Header />
+      <main className="mx-auto max-w-2xl px-5 pt-10 pb-16 sm:px-6">
+        <div className="mb-10 text-center">
+          <p aria-hidden className="mb-2 font-serif text-4xl text-(--accent)">
+            {info.symbol}
           </p>
-        </main>
-      </div>
+          <h1 className="font-serif text-4xl text-ink sm:text-5xl">{info.name}</h1>
+          <p className="mt-2 font-serif text-xl text-muted italic">{info.greeting}</p>
+        </div>
+        <Chat />
+        <DailyBlessing />
+        <ScriptureLookup />
+        <p className="mt-20 border-t border-line pt-6 text-center font-serif text-sm text-muted italic">
+          Divine Dialogue is an AI guide, not a religious authority. Answers can contain mistakes. If you are in crisis,
+          please contact your local emergency services.
+        </p>
+      </main>
     </div>
   )
 }

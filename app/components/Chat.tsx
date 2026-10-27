@@ -1,13 +1,13 @@
 "use client"
 
-import { Layers, MessageCircle, Mic, RotateCcw, Send } from "lucide-react"
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react"
+import { ArrowUp, Layers, Mic, RotateCcw } from "lucide-react"
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import { FAITH_INFO, FAITHS, type Faith } from "@/lib/faiths"
 import { MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS, type Citation } from "@/lib/schemas"
 import { streamChat, streamComparison, type ChatTurn } from "../lib/api"
 import { useAppState } from "../lib/state"
 import { useVoiceConversation } from "../lib/voice/useVoiceConversation"
-import { CitationList, Loading, Markdown, SaveButton } from "./ui"
+import { CitationList, faithStyle, Loading, Markdown, SaveButton } from "./ui"
 import { VoiceBar } from "./VoiceBar"
 
 type Perspective = { text: string; citations: Citation[] } | "error"
@@ -144,64 +144,51 @@ export function Chat() {
   }
 
   return (
-    <section aria-labelledby="chat-heading" className="mb-8">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id="chat-heading" className="flex items-center gap-2 text-xl font-medium text-(--accent)">
-          <MessageCircle aria-hidden className="size-5" />
-          Talk with the {info.name} guide
-        </h2>
-        {entries.length > 0 && (
-          <button
-            type="button"
-            disabled={busy || voiceActive}
-            onClick={() => setConversations((all) => ({ ...all, [faith]: [] }))}
-            className="flex items-center gap-1 text-sm text-slate-400 hover:text-white disabled:opacity-50"
-          >
-            <RotateCcw aria-hidden className="size-4" />
-            New conversation
-          </button>
+    <section aria-labelledby="chat-heading">
+      <h2 id="chat-heading" className="sr-only">
+        Talk with the {info.name} guide
+      </h2>
+
+      <div role="log" aria-live="polite" aria-label="Conversation" className="space-y-10">
+        {entries.length === 0 && (
+          <div className="text-center">
+            <p className="mx-auto max-w-md font-serif text-xl leading-relaxed text-ink/85">
+              Ask the {info.name} guide anything, by typing or by voice. Every quotation comes from a published
+              translation, linked to its source.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              {SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  disabled={busy || voiceActive}
+                  onClick={() => submit("guide", suggestion)}
+                  className="rounded-full border border-line bg-raised px-4 py-2 font-serif text-base text-ink/85 italic transition-colors hover:border-(--accent) hover:text-ink disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
+        {entries.map((entry) => {
+          if (entry.kind === "user") {
+            return (
+              <p key={entry.id} className="ml-auto max-w-[85%] text-right font-serif text-xl text-muted italic whitespace-pre-wrap">
+                {entry.text}
+              </p>
+            )
+          }
+          if (entry.kind === "guide") return <GuideReply key={entry.id} entry={entry} onSave={saveItem} />
+          return <Comparison key={entry.id} entry={entry} />
+        })}
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800 shadow-lg">
-        <div role="log" aria-live="polite" aria-label="Conversation" className="space-y-6 p-4 md:p-6">
-          {entries.length === 0 && (
-            <div className="py-4 text-center text-slate-300">
-              <p className="mb-4">
-                Ask the {info.name} guide anything. Quotes come from real, published translations, linked to their source.
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTIONS.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    disabled={busy || voiceActive}
-                    onClick={() => submit("guide", suggestion)}
-                    className="rounded-full border border-slate-600 px-3 py-1.5 text-sm hover:border-(--accent) hover:text-white"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {entries.map((entry) => {
-            if (entry.kind === "user") {
-              return (
-                <div key={entry.id} className="flex justify-end">
-                  <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-slate-700 px-4 py-2 whitespace-pre-wrap">{entry.text}</p>
-                </div>
-              )
-            }
-            if (entry.kind === "guide") return <GuideReply key={entry.id} entry={entry} onSave={saveItem} />
-            return <Comparison key={entry.id} entry={entry} />
-          })}
-        </div>
-
+      <div className="sticky bottom-0 z-10 -mx-5 mt-8 bg-linear-to-t from-paper from-75% to-transparent px-5 pt-6 pb-4 sm:-mx-6 sm:px-6">
         {voice.error && (
-          <p role="alert" className="flex items-start justify-between gap-3 border-t border-slate-700 px-4 pt-3 text-sm text-amber-200">
+          <p role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-line bg-raised px-4 py-3 text-sm text-danger">
             {voice.error}
-            <button type="button" onClick={voice.clearError} className="shrink-0 text-slate-400 hover:text-white">
+            <button type="button" onClick={voice.clearError} className="shrink-0 text-muted hover:text-ink">
               Dismiss
             </button>
           </p>
@@ -215,67 +202,68 @@ export function Chat() {
               event.preventDefault()
               submit("guide")
             }}
-            className="border-t border-slate-700 p-4"
           >
-            <label htmlFor="message" className="sr-only">
-              Your message
-            </label>
-            <textarea
-              id="message"
-              rows={2}
-              maxLength={MAX_MESSAGE_CHARS}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder={`Ask the ${info.name} guide…`}
-              className="w-full resize-none rounded-lg bg-slate-700 px-4 py-3 text-white ring-1 ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-(--accent) focus:outline-none"
-            />
-            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void voice.start()}
-                title="Talk with the guide hands-free"
-                className="mr-auto flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm hover:border-(--accent) disabled:opacity-50"
-              >
-                <Mic aria-hidden className="size-4" />
-                Talk
-              </button>
+            <div className="flex items-end gap-2 rounded-3xl border border-line bg-raised p-2 pl-5 shadow-sm focus-within:border-(--accent)">
+              <label htmlFor="message" className="sr-only">
+                Your message
+              </label>
+              <textarea
+                id="message"
+                rows={1}
+                maxLength={MAX_MESSAGE_CHARS}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={`Ask the ${info.name} guide…`}
+                className="field-sizing-content max-h-40 min-h-11 flex-1 resize-none bg-transparent py-2.5 font-serif text-lg text-ink placeholder:text-muted placeholder:italic focus:outline-none"
+              />
+              {draft.trim() ? (
+                <button
+                  type="submit"
+                  disabled={busy}
+                  aria-label="Ask the guide"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-full bg-(--accent) text-paper disabled:opacity-50"
+                >
+                  <ArrowUp aria-hidden className="size-5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void voice.start()}
+                  aria-label="Talk with the guide hands-free"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-full bg-(--accent) text-paper disabled:opacity-50"
+                >
+                  <Mic aria-hidden className="size-5" />
+                </button>
+              )}
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-3 px-2 text-sm">
               <button
                 type="button"
                 disabled={busy || !draft.trim()}
                 onClick={() => submit("compare")}
-                className="flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm hover:border-(--accent) disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 text-muted hover:text-ink disabled:opacity-50 disabled:hover:text-muted"
               >
                 <Layers aria-hidden className="size-4" />
                 Ask all six traditions
               </button>
-              <button
-                type="submit"
-                disabled={busy || !draft.trim()}
-                className="flex items-center gap-2 rounded-full bg-(--primary) px-4 py-2 text-sm font-medium ring-1 ring-(--accent) hover:brightness-125 disabled:opacity-50"
-              >
-                <Send aria-hidden className="size-4" />
-                Ask the guide
-              </button>
+              {entries.length > 0 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConversations((all) => ({ ...all, [faith]: [] }))}
+                  className="inline-flex items-center gap-1.5 text-muted hover:text-ink disabled:opacity-50"
+                >
+                  <RotateCcw aria-hidden className="size-3.5" />
+                  New conversation
+                </button>
+              )}
             </div>
           </form>
         )}
       </div>
     </section>
-  )
-}
-
-function GuideAvatar({ faith }: { faith: Faith }) {
-  const info = FAITH_INFO[faith]
-  return (
-    <div
-      aria-hidden
-      className="flex size-9 shrink-0 items-center justify-center rounded-full text-lg"
-      style={{ backgroundColor: info.primaryColor, color: info.accentColor }}
-    >
-      {info.symbol}
-    </div>
   )
 }
 
@@ -288,18 +276,20 @@ function GuideReply({
 }) {
   const info = FAITH_INFO[entry.faith]
   return (
-    <article aria-label={`${info.name} guide`} className="flex gap-3">
-      <GuideAvatar faith={entry.faith} />
-      <div className="min-w-0 flex-1">
+    <article aria-label={`${info.name} guide`}>
+      <p aria-hidden className="mb-2 text-(--accent)">
+        {info.symbol}
+      </p>
+      <div>
         {entry.text ? (
           <Markdown citations={entry.citations} anchor={entry.id}>
             {entry.text}
           </Markdown>
         ) : (
-          entry.status === "streaming" && <Loading label="The guide is looking up passages and writing" />
+          entry.status === "streaming" && <Loading label="Finding the right passages" />
         )}
         {entry.status === "error" && (
-          <p role="alert" className="mt-2 text-red-300">
+          <p role="alert" className="mt-2 font-serif text-lg text-danger">
             {entry.error}
           </p>
         )}
@@ -327,33 +317,32 @@ function GuideReply({
 function Comparison({ entry }: { entry: Extract<Entry, { kind: "compare" }> }) {
   return (
     <article aria-label="How each tradition sees it">
-      <p className="mb-3 text-sm text-slate-400">
-        Six traditions on: <span className="text-slate-200">“{entry.question}”</span>
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <p className="small-caps text-center text-sm text-muted">Six traditions on</p>
+      <p className="mt-1 mb-6 text-center font-serif text-2xl text-ink italic">“{entry.question}”</p>
+      <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2">
         {FAITHS.map((faith) => {
           const info = FAITH_INFO[faith]
           const result = entry.results[faith]
           const anchor = `${entry.id}-${faith}`
           return (
-            <div key={faith} className="rounded-lg border border-slate-700 bg-slate-900/40 p-4" style={{ borderTopColor: info.accentColor, borderTopWidth: 3 }}>
-              <h3 className="mb-2 flex items-center gap-2 font-medium">
-                <span aria-hidden style={{ color: info.accentColor }}>
+            <section key={faith} aria-label={info.name} className="faith-theme border-t-2 border-(--accent) pt-3" style={faithStyle(faith)}>
+              <h3 className="mb-2 flex items-center gap-2 font-serif text-xl">
+                <span aria-hidden className="text-(--accent)">
                   {info.symbol}
                 </span>
                 {info.name}
               </h3>
-              {!result && <Loading label={`Waiting for the ${info.name} guide`} />}
-              {result === "error" && <p className="text-sm text-red-300">This guide couldn&apos;t answer just now.</p>}
+              {!result && <Loading label="Reading" />}
+              {result === "error" && <p className="font-serif text-danger italic">This guide couldn&apos;t answer just now.</p>}
               {result && result !== "error" && (
-                <div style={{ "--accent": info.accentColor } as CSSProperties}>
-                  <Markdown citations={result.citations} anchor={anchor}>
+                <>
+                  <Markdown citations={result.citations} anchor={anchor} className="text-lg">
                     {result.text}
                   </Markdown>
                   <CitationList citations={result.citations} anchor={anchor} text={result.text} />
-                </div>
+                </>
               )}
-            </div>
+            </section>
           )
         })}
       </div>

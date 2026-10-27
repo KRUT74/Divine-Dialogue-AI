@@ -4,10 +4,10 @@ import { Mic } from "lucide-react"
 import type { VoiceStatus } from "../lib/voice/useVoiceConversation"
 
 const LABELS: Record<Exclude<VoiceStatus, "idle">, string> = {
-  connecting: "Starting the microphone…",
-  listening: "Listening…",
-  thinking: "The guide is thinking…",
-  speaking: "Speaking… talk to interrupt",
+  connecting: "Opening the microphone",
+  listening: "Listening",
+  thinking: "Reflecting",
+  speaking: "Speaking · talk to interrupt",
 }
 
 // Relative heights of the meter bars, so it reads like a small waveform.
@@ -32,22 +32,26 @@ export function VoiceBar({
   if (status === "idle") return null
   const listening = status === "listening"
   return (
-    <div role="group" aria-label="Voice conversation" className="flex items-center gap-4 border-t border-slate-700 p-4">
-      <div
-        aria-hidden
-        className={`flex size-11 shrink-0 items-center justify-center rounded-full bg-(--primary) ring-1 ring-(--accent) ${
-          status === "speaking" || status === "thinking" ? "animate-pulse motion-reduce:animate-none" : ""
-        }`}
-      >
-        <Mic className="size-5 text-(--accent)" />
+    <div
+      role="group"
+      aria-label="Voice conversation"
+      className="flex items-center gap-4 rounded-3xl border border-(--accent)/40 bg-raised p-3 pl-4 shadow-sm"
+    >
+      <div aria-hidden className="relative flex size-12 shrink-0 items-center justify-center">
+        {status !== "connecting" && <span className="breathe absolute inset-0 rounded-full bg-(--accent)" />}
+        <span className="relative flex size-10 items-center justify-center rounded-full bg-(--accent) text-paper">
+          <Mic className="size-5" />
+        </span>
       </div>
 
       <div className="min-w-0 flex-1" aria-live="polite">
-        <p className="text-xs tracking-wide text-(--accent) uppercase">{LABELS[status]}</p>
+        <p className="small-caps text-sm text-(--accent)">{LABELS[status]}</p>
         {hint && !partial ? (
-          <p className="text-sm text-amber-200">{hint}</p>
+          <p className="text-sm text-danger">{hint}</p>
         ) : (
-          <p className="truncate text-sm text-slate-200">{partial || (listening ? "Go ahead, I'm listening." : " ")}</p>
+          <p className="truncate font-serif text-lg text-ink">
+            {partial || (listening ? <span className="text-muted italic">Go ahead, I&apos;m listening.</span> : " ")}
+          </p>
         )}
       </div>
 
@@ -58,7 +62,7 @@ export function VoiceBar({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(level * 100)}
-          className="flex h-8 shrink-0 items-center gap-0.5"
+          className="hidden h-8 shrink-0 items-center gap-0.5 sm:flex"
         >
           {BARS.map((scale, i) => (
             <span
@@ -73,9 +77,9 @@ export function VoiceBar({
       <button
         type="button"
         onClick={onStop}
-        className="shrink-0 rounded-full border border-slate-600 px-4 py-2 text-sm hover:border-(--accent)"
+        className="shrink-0 rounded-full border border-line px-4 py-2 text-sm text-ink hover:border-(--accent)"
       >
-        End <span className="hidden text-xs text-slate-400 sm:inline">esc</span>
+        End
       </button>
     </div>
   )

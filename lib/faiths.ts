@@ -15,61 +15,55 @@ export const LANGUAGE_CODES: Record<Language, string> = { english: "en", spanish
 export type FaithInfo = {
   name: string
   symbol: string
-  primaryColor: string
-  accentColor: string
+  /** Ink colour on the ivory page (at least 4.5:1 contrast). */
+  color: string
+  /** The same colour for the night (dark) theme. */
+  nightColor: string
   greeting: string
-  /** Texts the scripture lookup can draw from. */
-  sources: string[]
 }
 
 export const FAITH_INFO: Record<Faith, FaithInfo> = {
   buddhism: {
     name: "Buddhism",
     symbol: "☸",
-    primaryColor: "#44403c",
-    accentColor: "#f59e0b",
+    color: "#9a5b13",
+    nightColor: "#e0a458",
     greeting: "May you be free from suffering",
-    sources: ["Dhammapada", "Sutta Pitaka", "Heart Sutra", "Diamond Sutra"],
   },
   christianity: {
     name: "Christianity",
     symbol: "✝",
-    primaryColor: "#312e81",
-    accentColor: "#fbbf24",
+    color: "#8c2f39",
+    nightColor: "#e08a92",
     greeting: "Grace and peace to you",
-    sources: ["Old Testament", "New Testament", "Gospels", "Psalms"],
   },
   hinduism: {
     name: "Hinduism",
     symbol: "ॐ",
-    primaryColor: "#581c87",
-    accentColor: "#2dd4bf",
+    color: "#a8431c",
+    nightColor: "#ec8f66",
     greeting: "Namaste. All is Divine",
-    sources: ["Bhagavad Gita", "Upanishads", "Rigveda", "Ramayana"],
   },
   islam: {
     name: "Islam",
     symbol: "☪",
-    primaryColor: "#064e3b",
-    accentColor: "#fef3c7",
+    color: "#1f6b4f",
+    nightColor: "#6fc3a0",
     greeting: "As-salamu alaykum",
-    sources: ["Quran", "Sahih al-Bukhari", "Sahih Muslim", "Forty Hadith of an-Nawawi"],
   },
   judaism: {
     name: "Judaism",
     symbol: "✡",
-    primaryColor: "#1e3a8a",
-    accentColor: "#cbd5e1",
+    color: "#2c4f8c",
+    nightColor: "#8fb1e8",
     greeting: "Shalom. Walk in light",
-    sources: ["Torah", "Psalms", "Pirkei Avot", "Talmud"],
   },
   secular: {
     name: "Secular",
     symbol: "∞",
-    primaryColor: "#334155",
-    accentColor: "#2dd4bf",
+    color: "#4a5560",
+    nightColor: "#a9b4bf",
     greeting: "Reflect with intention",
-    sources: ["Marcus Aurelius, Meditations", "Seneca, Letters", "Epictetus, Enchiridion", "Humanist writings"],
   },
 }
 

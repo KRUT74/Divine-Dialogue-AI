@@ -1,6 +1,6 @@
 "use client"
 
-import { BookOpen, Search } from "lucide-react"
+import { Search } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { FAITH_INFO, type Faith } from "@/lib/faiths"
 import type { Reading } from "@/lib/schemas"
@@ -38,8 +38,8 @@ export function ScriptureLookup() {
   }
 
   return (
-    <Section icon={BookOpen} title="Read a Passage">
-      <form onSubmit={submit} className="mb-4 flex flex-col gap-3 sm:flex-row">
+    <Section title="Read a Passage" eyebrow="From the source">
+      <form onSubmit={submit} className="mx-auto flex max-w-xl flex-col gap-3 sm:flex-row">
         <label htmlFor="work" className="sr-only">
           Text
         </label>
@@ -48,7 +48,7 @@ export function ScriptureLookup() {
           value={work}
           onChange={(e) => setWork(e.target.value as Work)}
           disabled={loading}
-          className="rounded-lg bg-slate-700 px-3 py-2 text-white ring-1 ring-(--accent) focus:ring-2 focus:outline-none"
+          className="rounded-full border border-line bg-raised px-4 py-2.5 text-ink focus:border-(--accent) focus:outline-none"
         >
           {works.map((id) => (
             <option key={id} value={id}>
@@ -69,33 +69,33 @@ export function ScriptureLookup() {
             disabled={loading}
             placeholder={`e.g. ${WORKS[work].example}`}
             aria-describedby="reference-help"
-            className="w-full rounded-lg bg-slate-700 py-2 pr-12 pl-4 text-white ring-1 ring-(--accent) placeholder:text-slate-400 focus:ring-2 focus:outline-none"
+            className="w-full rounded-full border border-line bg-raised py-2.5 pr-12 pl-4 font-serif text-lg text-ink placeholder:text-muted placeholder:italic focus:border-(--accent) focus:outline-none"
           />
           <button
             type="submit"
             aria-label="Read"
             disabled={loading || !reference.trim()}
-            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-(--accent) hover:bg-slate-600 disabled:opacity-50"
+            className="absolute top-1/2 right-1.5 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-(--accent) text-paper disabled:opacity-40"
           >
-            <Search aria-hidden className="size-5" />
+            <Search aria-hidden className="size-4" />
           </button>
         </div>
       </form>
-      <p id="reference-help" className="-mt-2 mb-4 text-sm text-slate-400">
+      <p id="reference-help" className="mx-auto mt-2 mb-8 max-w-xl px-4 text-sm text-muted">
         {WORKS[work].help}.
       </p>
 
       {loading && <Loading label="Fetching the passage" />}
       {!loading && error && <ErrorMessage message={error} onRetry={() => submit()} />}
       {!loading && !error && !result && (
-        <Placeholder icon={BookOpen}>
-          Read any passage from {FAITH_INFO[faith].name}&apos;s texts, with a short explanation
-        </Placeholder>
+        <Placeholder>Read any passage from {FAITH_INFO[faith].name}&apos;s texts, with a short explanation.</Placeholder>
       )}
       {!loading && !error && result && (
-        <div>
-          <Quote citation={result.reading.passage} large />
-          {result.reading.explanation && <p className="mt-4 text-slate-300">{result.reading.explanation}</p>}
+        <div className="text-center">
+          <Quote citation={result.reading.passage} />
+          {result.reading.explanation && (
+            <p className="mx-auto mt-8 max-w-xl text-left font-serif text-xl leading-relaxed text-ink/90">{result.reading.explanation}</p>
+          )}
           <SaveButton
             key={result.reading.passage.reference}
             onSave={() =>
