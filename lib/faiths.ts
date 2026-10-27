@@ -9,6 +9,9 @@ export const LANGUAGE_LABELS: Record<Language, string> = {
   spanish: "Español",
 }
 
+/** ISO 639-1 codes, for speech recognition and synthesis. */
+export const LANGUAGE_CODES: Record<Language, string> = { english: "en", spanish: "es" }
+
 export type FaithInfo = {
   name: string
   symbol: string

@@ -46,10 +46,11 @@ export async function streamChat(
   faith: Faith,
   language: Language,
   messages: ChatTurn[],
+  mode: "text" | "voice",
   onEvent: (event: ChatEvent) => void,
   signal?: AbortSignal,
 ) {
-  await readEvents(await post("/api/chat", { faith, language, messages }, signal), onEvent)
+  await readEvents(await post("/api/chat", { faith, language, mode, messages }, signal), onEvent)
 }
 
 export async function streamComparison(

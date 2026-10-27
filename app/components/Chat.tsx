@@ -1,12 +1,14 @@
 "use client"
 
-import { Layers, MessageCircle, RotateCcw, Send } from "lucide-react"
-import { useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react"
+import { Layers, MessageCircle, Mic, RotateCcw, Send } from "lucide-react"
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react"
 import { FAITH_INFO, FAITHS, type Faith } from "@/lib/faiths"
 import { MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS, type Citation } from "@/lib/schemas"
 import { streamChat, streamComparison, type ChatTurn } from "../lib/api"
 import { useAppState } from "../lib/state"
+import { useVoiceConversation } from "../lib/voice/useVoiceConversation"
 import { CitationList, Loading, Markdown, SaveButton } from "./ui"
+import { VoiceBar } from "./VoiceBar"
 
 type Perspective = { text: string; citations: Citation[] } | "error"
 
@@ -57,23 +59,35 @@ export function Chat() {
     setConversations((all) => ({ ...all, [target]: [...(all[target] ?? []), ...added] }))
   }
 
-  async function ask(question: string) {
+  /** Asks the current guide; resolves to the reply text, or null if it failed. */
+  async function ask(question: string, mode: "text" | "voice" = "text", onTextDelta?: (delta: string) => void) {
     const target = faith
+    let text = ""
+    let failed = false
     const userEntry: Entry = { kind: "user", id: crypto.randomUUID(), text: question }
     const reply: Entry = { kind: "guide", id: crypto.randomUUID(), faith: target, question, text: "", citations: [], status: "streaming" }
     const history = historyFrom([...entries, userEntry])
     append(target, userEntry, reply)
     try {
-      await streamChat(target, language, history, (event) => {
-        if (event.type === "text") update(target, reply.id, (e) => (e.kind === "guide" ? { ...e, text: e.text + event.text } : e))
+      await streamChat(target, language, history, mode, (event) => {
+        if (event.type === "text") {
+          text += event.text
+          onTextDelta?.(event.text)
+          update(target, reply.id, (e) => (e.kind === "guide" ? { ...e, text: e.text + event.text } : e))
+        }
         if (event.type === "citation")
           update(target, reply.id, (e) => (e.kind === "guide" ? { ...e, citations: [...e.citations, event.citation] } : e))
-        if (event.type === "error") update(target, reply.id, (e) => (e.kind === "guide" ? { ...e, status: "error", error: event.error } : e))
+        if (event.type === "error") {
+          failed = true
+          update(target, reply.id, (e) => (e.kind === "guide" ? { ...e, status: "error", error: event.error } : e))
+        }
       })
       update(target, reply.id, (e) => (e.kind === "guide" && e.status === "streaming" ? { ...e, status: "done" } : e))
     } catch (error) {
+      failed = true
       update(target, reply.id, (e) => (e.kind === "guide" ? { ...e, status: "error", error: (error as Error).message } : e))
     }
+    return failed ? null : text
   }
 
   async function compare(question: string) {
@@ -92,6 +106,23 @@ export function Chat() {
     }
     update(target, entry.id, (e) => (e.kind === "compare" ? { ...e, done: true } : e))
   }
+
+  const voice = useVoiceConversation({
+    language,
+    send: async (question, onTextDelta) => {
+      setBusy(true)
+      try {
+        return await ask(question, "voice", onTextDelta)
+      } finally {
+        setBusy(false)
+      }
+    },
+  })
+  const voiceActive = voice.status !== "idle"
+  const stopVoice = voice.stop
+
+  // A voice conversation belongs to one guide and language; switching either ends it.
+  useEffect(() => stopVoice(), [faith, language, stopVoice])
 
   async function submit(mode: "guide" | "compare", text = draft) {
     const question = text.trim()
@@ -122,7 +153,7 @@ export function Chat() {
         {entries.length > 0 && (
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || voiceActive}
             onClick={() => setConversations((all) => ({ ...all, [faith]: [] }))}
             className="flex items-center gap-1 text-sm text-slate-400 hover:text-white disabled:opacity-50"
           >
@@ -144,7 +175,7 @@ export function Chat() {
                   <button
                     key={suggestion}
                     type="button"
-                    disabled={busy}
+                    disabled={busy || voiceActive}
                     onClick={() => submit("guide", suggestion)}
                     className="rounded-full border border-slate-600 px-3 py-1.5 text-sm hover:border-(--accent) hover:text-white"
                   >
@@ -167,47 +198,69 @@ export function Chat() {
           })}
         </div>
 
-        <form
-          ref={formRef}
-          onSubmit={(event: FormEvent) => {
-            event.preventDefault()
-            submit("guide")
-          }}
-          className="border-t border-slate-700 p-4"
-        >
-          <label htmlFor="message" className="sr-only">
-            Your message
-          </label>
-          <textarea
-            id="message"
-            rows={2}
-            maxLength={MAX_MESSAGE_CHARS}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder={`Ask the ${info.name} guide…`}
-            className="w-full resize-none rounded-lg bg-slate-700 px-4 py-3 text-white ring-1 ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-(--accent) focus:outline-none"
-          />
-          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              disabled={busy || !draft.trim()}
-              onClick={() => submit("compare")}
-              className="flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm hover:border-(--accent) disabled:opacity-50"
-            >
-              <Layers aria-hidden className="size-4" />
-              Ask all six traditions
+        {voice.error && (
+          <p role="alert" className="flex items-start justify-between gap-3 border-t border-slate-700 px-4 pt-3 text-sm text-amber-200">
+            {voice.error}
+            <button type="button" onClick={voice.clearError} className="shrink-0 text-slate-400 hover:text-white">
+              Dismiss
             </button>
-            <button
-              type="submit"
-              disabled={busy || !draft.trim()}
-              className="flex items-center gap-2 rounded-full bg-(--primary) px-4 py-2 text-sm font-medium ring-1 ring-(--accent) hover:brightness-125 disabled:opacity-50"
-            >
-              <Send aria-hidden className="size-4" />
-              Ask the guide
-            </button>
-          </div>
-        </form>
+          </p>
+        )}
+        {voiceActive ? (
+          <VoiceBar status={voice.status} partial={voice.partial} hint={voice.hint} level={voice.level} onStop={() => voice.stop()} />
+        ) : (
+          <form
+            ref={formRef}
+            onSubmit={(event: FormEvent) => {
+              event.preventDefault()
+              submit("guide")
+            }}
+            className="border-t border-slate-700 p-4"
+          >
+            <label htmlFor="message" className="sr-only">
+              Your message
+            </label>
+            <textarea
+              id="message"
+              rows={2}
+              maxLength={MAX_MESSAGE_CHARS}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder={`Ask the ${info.name} guide…`}
+              className="w-full resize-none rounded-lg bg-slate-700 px-4 py-3 text-white ring-1 ring-slate-600 placeholder:text-slate-400 focus:ring-2 focus:ring-(--accent) focus:outline-none"
+            />
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void voice.start()}
+                title="Talk with the guide hands-free"
+                className="mr-auto flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm hover:border-(--accent) disabled:opacity-50"
+              >
+                <Mic aria-hidden className="size-4" />
+                Talk
+              </button>
+              <button
+                type="button"
+                disabled={busy || !draft.trim()}
+                onClick={() => submit("compare")}
+                className="flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm hover:border-(--accent) disabled:opacity-50"
+              >
+                <Layers aria-hidden className="size-4" />
+                Ask all six traditions
+              </button>
+              <button
+                type="submit"
+                disabled={busy || !draft.trim()}
+                className="flex items-center gap-2 rounded-full bg-(--primary) px-4 py-2 text-sm font-medium ring-1 ring-(--accent) hover:brightness-125 disabled:opacity-50"
+              >
+                <Send aria-hidden className="size-4" />
+                Ask the guide
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </section>
   )
