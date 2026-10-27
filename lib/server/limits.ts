@@ -1,0 +1,208 @@
+import "server-only"
+import type { Feature, Usage } from "@/lib/schemas"
+import { planFor, type Plan } from "./stripe"
+import { supabase, supabaseConfigured } from "./supabase"
+import { accountIdOf, type Visitor } from "./visitor"
+
+function numberFrom(name: string, fallback: number): number {
+  const parsed = Number(process.env[name])
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+/** Daily allowances for each plan and the demo's safety ceilings. Each can be overridden by env var. */
+const LIMITS = {
+  free: {
+    perDay: {
+      chat: numberFrom("FREE_CHAT_PER_DAY", 10),
+      voice: numberFrom("FREE_VOICE_PER_DAY", 3),
+      compare: numberFrom("FREE_COMPARE_PER_DAY", 2),
+      read: numberFrom("FREE_READ_PER_DAY", 10),
+    } satisfies Record<Feature, number>,
+    /** One visitor's estimated spend in 24 hours, including voice. */
+    budgetUsd: numberFrom("VISITOR_DAILY_BUDGET_USD", 0.4),
+    perMinute: numberFrom("VISITOR_PER_MINUTE", 6),
+  },
+  plus: {
+    perDay: {
+      chat: numberFrom("PLUS_CHAT_PER_DAY", 100),
+      voice: numberFrom("PLUS_VOICE_PER_DAY", 40),
+      compare: numberFrom("PLUS_COMPARE_PER_DAY", 20),
+      read: numberFrom("PLUS_READ_PER_DAY", 50),
+    } satisfies Record<Feature, number>,
+    /** Voice is the costly part, so Plus also has a monthly voice allowance (about 3 hours of talking). */
+    voicePerMonth: numberFrom("PLUS_VOICE_PER_MONTH", 200),
+    budgetUsd: numberFrom("PLUS_DAILY_BUDGET_USD", 2),
+    perMinute: numberFrom("PLUS_PER_MINUTE", 12),
+  },
+  /** Questions from one network in 24 hours: room for a household or classroom, not a script. */
+  ipQuestionsPerDay: numberFrom("IP_QUESTIONS_PER_DAY", 60),
+  /** New visitor cookies from one network in 24 hours, so clearing cookies doesn't reset limits. */
+  ipVisitorsPerDay: numberFrom("IP_VISITORS_PER_DAY", 20),
+  /** Estimated spend across everyone in 24 hours. Past it, free AI features pause for the day. */
+  dailyBudgetUsd: numberFrom("DAILY_BUDGET_USD", 3),
+  /** A hard ceiling that pauses everything, Plus included. */
+  hardDailyBudgetUsd: numberFrom("HARD_DAILY_BUDGET_USD", 10),
+}
+
+const FREE_MESSAGES: Record<Feature, (limit: number) => string> = {
+  chat: (n) => `You've asked today's ${n} free questions. Come back tomorrow, or upgrade to Plus for more.`,
+  voice: (n) => `You've used today's ${n} free voice replies. You can keep typing, or upgrade to Plus to keep talking.`,
+  compare: (n) => `You've used today's ${n} free six-tradition comparisons. Come back tomorrow, or upgrade to Plus for more.`,
+  read: (n) => `You've read today's ${n} free passages with explanations. Come back tomorrow, or upgrade to Plus for more.`,
+}
+const PLUS_DAILY_MESSAGE = "You've reached today's Plus limit for this feature. It resets tomorrow."
+const PLUS_MONTHLY_VOICE_MESSAGE = "You've used this month's Plus voice replies. You can keep typing; voice resets as the month rolls on."
+
+type Summary = {
+  visitor_chat: number
+  visitor_voice: number
+  visitor_compare: number
+  visitor_read: number
+  visitor_last_minute: number
+  visitor_cost: number
+  ip_questions: number
+  ip_visitors: number
+  total_cost: number
+  visitor_voice_month: number
+}
+
+const DAY_SECONDS = 24 * 60 * 60
+
+export class LimitError extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterSeconds: number,
+  ) {
+    super(message)
+  }
+}
+
+let warned = false
+
+/** In development without Supabase, limits are off; in production that is an error. */
+function limitsEnabled(): boolean {
+  if (supabaseConfigured()) return true
+  if (process.env.NODE_ENV === "production") throw new Error("Usage limits need SUPABASE_URL and SUPABASE_SECRET_KEY.")
+  if (!warned) console.warn("[limits] Supabase is not configured: usage limits are off in development.")
+  warned = true
+  return false
+}
+
+async function summary(visitor: Visitor): Promise<Summary> {
+  const { data, error } = await supabase().rpc("usage_summary", { p_visitor_id: visitor.id, p_ip_hash: visitor.ipHash })
+  if (error) throw error
+  const row = (data as Summary[])[0]
+  return { ...row, visitor_cost: Number(row.visitor_cost), total_cost: Number(row.total_cost) }
+}
+
+/** The visitor's usage and plan, recording them as a new visitor if this is their first request. */
+async function load(visitor: Visitor): Promise<{ s: Summary; plan: Plan }> {
+  const [s, plan] = await Promise.all([summary(visitor), planFor(accountIdOf(visitor))])
+  if (visitor.isNew) {
+    if (s.ip_visitors >= LIMITS.ipVisitorsPerDay) {
+      throw new LimitError("Too many new visitors from your network today. Please try again tomorrow.", DAY_SECONDS)
+    }
+    await record("visitor", visitor)
+  }
+  return { s, plan }
+}
+
+function checkSpend(s: Summary, plan: Plan) {
+  const plus = plan.plan === "plus"
+  if (s.total_cost >= LIMITS.hardDailyBudgetUsd || (!plus && s.total_cost >= LIMITS.dailyBudgetUsd)) {
+    throw new LimitError("Divine Dialogue has reached its limit for today. Please come back tomorrow.", DAY_SECONDS)
+  }
+  if (s.visitor_cost >= LIMITS[plan.plan].budgetUsd) {
+    throw new LimitError(
+      plus ? "You've reached today's Plus limit. It resets tomorrow." : "You've reached today's free limit. Please come back tomorrow.",
+      DAY_SECONDS,
+    )
+  }
+}
+
+/** Throws a LimitError if the visitor's voice allowance is used up. */
+function checkVoice(s: Summary, plan: Plan) {
+  if (plan.plan === "plus" && s.visitor_voice_month >= LIMITS.plus.voicePerMonth) {
+    throw new LimitError(PLUS_MONTHLY_VOICE_MESSAGE, DAY_SECONDS)
+  }
+  const limit = LIMITS[plan.plan].perDay.voice
+  if (s.visitor_voice >= limit) {
+    throw new LimitError(plan.plan === "plus" ? PLUS_DAILY_MESSAGE : FREE_MESSAGES.voice(limit), DAY_SECONDS)
+  }
+}
+
+/** Throws a LimitError if the visitor may not use this feature right now. */
+export async function checkAllowed(visitor: Visitor, feature: Feature): Promise<void> {
+  if (!limitsEnabled()) return
+  const { s, plan } = await load(visitor)
+  checkSpend(s, plan)
+  if (s.visitor_last_minute >= LIMITS[plan.plan].perMinute) {
+    throw new LimitError("You're asking quickly. Please wait a moment and try again.", 60)
+  }
+  // Plus members are counted individually, so a shared network can't hold them back.
+  if (plan.plan === "free" && s.ip_questions >= LIMITS.ipQuestionsPerDay) {
+    throw new LimitError("Your network has reached today's free limit. Please come back tomorrow.", DAY_SECONDS)
+  }
+  if (feature === "voice") return checkVoice(s, plan)
+  const limit = LIMITS[plan.plan].perDay[feature]
+  if (s[`visitor_${feature}`] >= limit) {
+    throw new LimitError(plan.plan === "plus" ? PLUS_DAILY_MESSAGE : FREE_MESSAGES[feature](limit), DAY_SECONDS)
+  }
+}
+
+/** For voice listening and speech, which are bounded by spend rather than counted. */
+export async function checkSpendAllowed(visitor: Visitor, { needsVoiceReply = false } = {}): Promise<void> {
+  if (!limitsEnabled()) return
+  const { s, plan } = await load(visitor)
+  checkSpend(s, plan)
+  if (needsVoiceReply) checkVoice(s, plan)
+}
+
+/** Logs a billable action. Never throws: a logging failure shouldn't fail the visitor's request. */
+export async function record(kind: Feature | "visitor" | "blessing" | "listen" | "speak", visitor: Visitor | null, costUsd = 0) {
+  if (!supabaseConfigured()) return
+  const { error } = await supabase()
+    .from("usage_events")
+    .insert({ kind, visitor_id: visitor?.id ?? null, ip_hash: visitor?.ipHash ?? null, cost_usd: costUsd })
+  if (error) console.error("[limits] Recording usage failed", error)
+}
+
+/** What the visitor has left today, for the app to show. */
+export async function usageFor(visitor: Visitor): Promise<Usage> {
+  if (!limitsEnabled()) {
+    const limits = LIMITS.free.perDay
+    return { plan: "free", limits, remaining: { ...limits }, paused: false }
+  }
+  const { s, plan } = await load(visitor)
+  const limits = LIMITS[plan.plan].perDay
+  let paused = false
+  try {
+    checkSpend(s, plan)
+  } catch {
+    paused = true
+  }
+  const remaining = Object.fromEntries(
+    Object.entries(limits).map(([feature, limit]) => [feature, paused ? 0 : Math.max(0, limit - s[`visitor_${feature as Feature}`])]),
+  ) as Record<Feature, number>
+  if (plan.plan === "plus") remaining.voice = Math.min(remaining.voice, Math.max(0, LIMITS.plus.voicePerMonth - s.visitor_voice_month))
+  return { plan: plan.plan, limits, remaining, paused, renewsAt: plan.renewsAt, cancelsAtPeriodEnd: plan.cancelsAtPeriodEnd }
+}
+
+/**
+ * Runs a limit check and turns a refusal into the response to send, or null to go ahead.
+ * If the usage database can't be reached, AI features are refused rather than left unguarded.
+ */
+export async function guard(check: () => Promise<void>): Promise<Response | null> {
+  try {
+    await check()
+    return null
+  } catch (error) {
+    if (error instanceof LimitError) return limitResponse(error)
+    console.error("[limits] Limit check failed", error)
+    return Response.json({ error: "Divine Dialogue is unavailable for a moment. Please try again shortly." }, { status: 503 })
+  }
+}
+
+function limitResponse(error: LimitError) {
+  return Response.json({ error: error.message, limit: true }, { status: 429, headers: { "Retry-After": String(error.retryAfterSeconds) } })
+}
