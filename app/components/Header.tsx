@@ -5,12 +5,13 @@ import { useEffect, useId, useRef } from "react"
 import { FAITH_INFO, FAITHS, LANGUAGE_LABELS, LANGUAGES, type Language } from "@/lib/faiths"
 import { cn } from "@/lib/utils"
 import { useAppState } from "../lib/state"
+import { AccountDialog } from "./AccountDialog"
 import { faithStyle } from "./ui"
 
 export function Header() {
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
-      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 pt-3 sm:px-6">
+      <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 pt-3 sm:px-6">
         <p className="flex items-center gap-2 font-serif text-xl whitespace-nowrap text-ink">
           <span aria-hidden className="text-gold">
             ✦
@@ -20,6 +21,7 @@ export function Header() {
         <div className="flex items-center gap-1">
           <LanguagePicker />
           <SavedDrawer />
+          <AccountDialog />
         </div>
       </div>
       <FaithPicker />
@@ -103,7 +105,8 @@ function SavedDrawer() {
         className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm text-muted hover:text-ink"
       >
         <Bookmark aria-hidden className="size-4" />
-        Saved{savedItems.length > 0 && <span className="text-xs text-gold-text">{savedItems.length}</span>}
+        <span className="sr-only sm:not-sr-only">Saved</span>
+        {savedItems.length > 0 && <span className="text-xs text-gold-text">{savedItems.length}</span>}
       </button>
       <dialog
         ref={dialogRef}

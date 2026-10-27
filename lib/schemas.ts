@@ -71,3 +71,18 @@ export type Feature = "chat" | "voice" | "compare" | "read"
 
 /** What a visitor has left today. */
 export type Usage = { limits: Record<Feature, number>; remaining: Record<Feature, number>; paused: boolean }
+
+export const SavedItemSchema = z.object({
+  id: z.uuid(),
+  faith,
+  type: z.enum(["blessing", "answer", "scripture"]),
+  title: z.string().trim().min(1).max(300),
+  content: z.string().min(1).max(20_000),
+  savedAt: z.iso.datetime({ offset: true }),
+})
+export type SavedItem = z.infer<typeof SavedItemSchema>
+
+/** The signed-in account, as the app shows it (email partly hidden), or null for a guest. */
+export type AccountInfo = { email: string } | null
+
+export type Me = { account: AccountInfo; usage: Usage }

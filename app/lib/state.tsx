@@ -2,17 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { isFaith, isLanguage, type Faith, type Language } from "@/lib/faiths"
-import type { Usage } from "@/lib/schemas"
-import { fetchUsage } from "./api"
+import { SavedItemSchema, type AccountInfo, type SavedItem, type Usage } from "@/lib/schemas"
+import { deleteSaved, fetchMe, fetchSaved, postSaved, signOut as postSignOut } from "./api"
 
-export type SavedItem = {
-  id: string
-  faith: Faith
-  type: "blessing" | "answer" | "scripture"
-  title: string
-  content: string
-  savedAt: string
-}
+export type { SavedItem }
 
 type AppState = {
   faith: Faith
@@ -25,6 +18,11 @@ type AppState = {
   /** Today's free allowance, or null until loaded (or if it couldn't be). */
   usage: Usage | null
   refreshUsage: () => void
+  /** The signed-in account, null for a guest, undefined while loading. */
+  account: AccountInfo | undefined
+  /** Call after a successful sign-in with the account's saved items from the server. */
+  signedIn: (account: NonNullable<AccountInfo>, savedItems: SavedItem[]) => void
+  signOut: () => Promise<void>
 }
 
 const AppStateContext = createContext<AppState | null>(null)
@@ -41,51 +39,113 @@ function readStored(): Stored {
   }
 }
 
-/** Keeps the chosen tradition, language and saved items in this browser only. */
+/** Saved items from older versions or a damaged store are dropped rather than breaking the page. */
+function validItems(value: unknown): SavedItem[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    const parsed = SavedItemSchema.safeParse(item)
+    return parsed.success ? [parsed.data] : []
+  })
+}
+
+/**
+ * Keeps the chosen tradition and language in this browser. Saved items live in the
+ * browser for guests and on the server for signed-in accounts, so they follow you.
+ */
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [faith, setFaith] = useState<Faith>("buddhism")
   const [language, setLanguage] = useState<Language>("english")
   const [savedItems, setSavedItems] = useState<SavedItem[]>([])
   const [loaded, setLoaded] = useState(false)
   const [usage, setUsage] = useState<Usage | null>(null)
+  const [account, setAccount] = useState<AccountInfo | undefined>(undefined)
 
   const refreshUsage = useCallback(() => {
-    void fetchUsage().then(setUsage)
+    void fetchMe().then((me) => me && setUsage(me.usage))
   }, [])
-
-  useEffect(refreshUsage, [refreshUsage])
 
   useEffect(() => {
     const stored = readStored()
     /* eslint-disable react-hooks/set-state-in-effect -- browser storage is only readable after hydration */
     if (isFaith(stored.faith)) setFaith(stored.faith)
     if (isLanguage(stored.language)) setLanguage(stored.language)
-    if (Array.isArray(stored.savedItems)) setSavedItems(stored.savedItems as SavedItem[])
+    const localItems = validItems(stored.savedItems)
+    setSavedItems(localItems)
     setLoaded(true)
     /* eslint-enable react-hooks/set-state-in-effect */
+
+    void fetchMe().then(async (me) => {
+      if (!me) return setAccount(null)
+      setUsage(me.usage)
+      setAccount(me.account)
+      if (me.account) {
+        const items = await fetchSaved()
+        if (items) setSavedItems(items)
+      }
+    })
   }, [])
 
   useEffect(() => {
     // Writing before the first read would overwrite what was stored.
     if (!loaded) return
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ faith, language, savedItems }))
+      // A signed-in account's items live on the server, not in this browser.
+      const local = account ? [] : savedItems
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ faith, language, savedItems: local }))
     } catch {
       // Storage can be unavailable (private browsing); the app still works without it.
     }
-  }, [loaded, faith, language, savedItems])
+  }, [loaded, faith, language, savedItems, account])
 
-  const saveItem = useCallback((item: Omit<SavedItem, "id" | "savedAt">) => {
-    setSavedItems((items) => [{ ...item, id: crypto.randomUUID(), savedAt: new Date().toISOString() }, ...items])
-  }, [])
+  const saveItem = useCallback(
+    (item: Omit<SavedItem, "id" | "savedAt">) => {
+      const saved = { ...item, id: crypto.randomUUID(), savedAt: new Date().toISOString() }
+      setSavedItems((items) => [saved, ...items])
+      if (account) void postSaved(saved)
+    },
+    [account],
+  )
 
-  const removeItem = useCallback((id: string) => {
-    setSavedItems((items) => items.filter((item) => item.id !== id))
-  }, [])
+  const removeItem = useCallback(
+    (id: string) => {
+      setSavedItems((items) => items.filter((item) => item.id !== id))
+      if (account) void deleteSaved(id)
+    },
+    [account],
+  )
+
+  const signedIn = useCallback(
+    (next: NonNullable<AccountInfo>, items: SavedItem[]) => {
+      setAccount(next)
+      setSavedItems(items)
+      refreshUsage()
+    },
+    [refreshUsage],
+  )
+
+  const signOut = useCallback(async () => {
+    await postSignOut()
+    setAccount(null)
+    setSavedItems([])
+    refreshUsage()
+  }, [refreshUsage])
 
   const value = useMemo(
-    () => ({ faith, language, setFaith, setLanguage, savedItems, saveItem, removeItem, usage, refreshUsage }),
-    [faith, language, savedItems, saveItem, removeItem, usage, refreshUsage],
+    () => ({
+      faith,
+      language,
+      setFaith,
+      setLanguage,
+      savedItems,
+      saveItem,
+      removeItem,
+      usage,
+      refreshUsage,
+      account,
+      signedIn,
+      signOut,
+    }),
+    [faith, language, savedItems, saveItem, removeItem, usage, refreshUsage, account, signedIn, signOut],
   )
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>

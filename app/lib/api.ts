@@ -1,5 +1,5 @@
 import type { Faith, Language } from "@/lib/faiths"
-import type { Blessing, ChatEvent, CompareEvent, Reading, Usage } from "@/lib/schemas"
+import type { AccountInfo, Blessing, ChatEvent, CompareEvent, Me, Reading, SavedItem } from "@/lib/schemas"
 import type { Work } from "@/lib/works"
 
 /** The visitor has used up a free allowance (the message says which, and when to come back). */
@@ -66,9 +66,35 @@ export async function streamComparison(
   await readEvents(await post("/api/compare", { language, question }, signal), onEvent)
 }
 
-export async function fetchUsage(): Promise<Usage | null> {
-  const response = await fetch("/api/usage", { cache: "no-store" }).catch(() => null)
-  return response?.ok ? ((await response.json()) as Usage) : null
+/** Who this visitor is and what's left today; null if it couldn't be loaded. */
+export async function fetchMe(): Promise<Me | null> {
+  const response = await fetch("/api/me", { cache: "no-store" }).catch(() => null)
+  return response?.ok ? ((await response.json()) as Me) : null
+}
+
+export async function fetchSaved(): Promise<SavedItem[] | null> {
+  const response = await fetch("/api/saved", { cache: "no-store" }).catch(() => null)
+  return response?.ok ? ((await response.json()) as { savedItems: SavedItem[] }).savedItems : null
+}
+
+export async function postSaved(item: SavedItem) {
+  await post("/api/saved", item).catch((error) => console.error("Saving to your account failed", error))
+}
+
+export async function deleteSaved(id: string) {
+  await fetch(`/api/saved?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {})
+}
+
+export async function requestSignInCode(email: string) {
+  await post("/api/auth/request-code", { email })
+}
+
+export function verifySignInCode(email: string, code: string, savedItems: SavedItem[]) {
+  return postJson<{ account: NonNullable<AccountInfo>; savedItems: SavedItem[] }>("/api/auth/verify", { email, code, savedItems })
+}
+
+export async function signOut() {
+  await post("/api/auth/sign-out", {})
 }
 
 export function readPassage(faith: Faith, language: Language, work: Work, reference: string) {
