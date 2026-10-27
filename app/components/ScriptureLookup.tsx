@@ -3,32 +3,33 @@
 import { BookOpen, Search } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { FAITH_INFO, type Faith } from "@/lib/faiths"
-import type { Passage } from "@/lib/schemas"
-import { lookUpPassage } from "../lib/api"
+import type { Reading } from "@/lib/schemas"
+import { FAITH_WORKS, WORKS, type Work } from "@/lib/works"
+import { readPassage } from "../lib/api"
 import { useAppState } from "../lib/state"
-import { ErrorMessage, Loading, Placeholder, SaveButton, Section } from "./ui"
+import { ErrorMessage, Loading, Placeholder, Quote, SaveButton, Section } from "./ui"
 
-type Result = { faith: Faith; passage: Passage }
+type Result = { faith: Faith; reading: Reading }
 
 export function ScriptureLookup() {
   const { faith, language, saveItem } = useAppState()
-  const sources = FAITH_INFO[faith].sources
-  const [chosenSource, setSource] = useState("")
+  const works = FAITH_WORKS[faith]
+  const [chosenWork, setWork] = useState<Work | null>(null)
   const [reference, setReference] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<Result | null>(null)
 
-  // A source chosen for another tradition no longer applies.
-  const source = sources.includes(chosenSource) ? chosenSource : ""
+  // A text chosen for another tradition no longer applies.
+  const work = chosenWork && works.includes(chosenWork) ? chosenWork : works[0]
 
   async function submit(event?: FormEvent) {
     event?.preventDefault()
-    if (!source || !reference.trim() || loading) return
+    if (!reference.trim() || loading) return
     setLoading(true)
     setError(null)
     try {
-      setResult({ faith, passage: await lookUpPassage(faith, language, source, reference.trim()) })
+      setResult({ faith, reading: await readPassage(faith, language, work, reference.trim()) })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -37,78 +38,75 @@ export function ScriptureLookup() {
   }
 
   return (
-    <Section icon={BookOpen} title="Scripture Lookup">
+    <Section icon={BookOpen} title="Read a Passage">
       <form onSubmit={submit} className="mb-4 flex flex-col gap-3 sm:flex-row">
-        <label htmlFor="source" className="sr-only">
+        <label htmlFor="work" className="sr-only">
           Text
         </label>
         <select
-          id="source"
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
+          id="work"
+          value={work}
+          onChange={(e) => setWork(e.target.value as Work)}
           disabled={loading}
           className="rounded-lg bg-slate-700 px-3 py-2 text-white ring-1 ring-(--accent) focus:ring-2 focus:outline-none"
         >
-          <option value="">Choose a text</option>
-          {sources.map((name) => (
-            <option key={name} value={name}>
-              {name}
+          {works.map((id) => (
+            <option key={id} value={id}>
+              {WORKS[id].label}
             </option>
           ))}
         </select>
         <div className="relative flex-1">
           <label htmlFor="reference" className="sr-only">
-            Chapter or verse
+            Reference
           </label>
           <input
             id="reference"
             type="text"
-            maxLength={200}
+            maxLength={100}
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             disabled={loading}
-            placeholder="Chapter or verse, e.g. 5:9"
+            placeholder={`e.g. ${WORKS[work].example}`}
+            aria-describedby="reference-help"
             className="w-full rounded-lg bg-slate-700 py-2 pr-12 pl-4 text-white ring-1 ring-(--accent) placeholder:text-slate-400 focus:ring-2 focus:outline-none"
           />
           <button
             type="submit"
-            aria-label="Look up"
-            disabled={loading || !source || !reference.trim()}
+            aria-label="Read"
+            disabled={loading || !reference.trim()}
             className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-(--accent) hover:bg-slate-600 disabled:opacity-50"
           >
             <Search aria-hidden className="size-5" />
           </button>
         </div>
       </form>
+      <p id="reference-help" className="-mt-2 mb-4 text-sm text-slate-400">
+        {WORKS[work].help}.
+      </p>
 
-      {loading && <Loading label="Looking up the passage" />}
+      {loading && <Loading label="Fetching the passage" />}
       {!loading && error && <ErrorMessage message={error} onRetry={() => submit()} />}
       {!loading && !error && !result && (
-        <Placeholder icon={Search}>Choose a text and a chapter or verse to read it with an explanation</Placeholder>
+        <Placeholder icon={BookOpen}>
+          Read any passage from {FAITH_INFO[faith].name}&apos;s texts, with a short explanation
+        </Placeholder>
       )}
       {!loading && !error && result && (
         <div>
-          <h3 className="mb-2 font-serif text-lg font-medium">{result.passage.reference}</h3>
-          {result.passage.found && (
-            <blockquote className="mb-4 border-l-4 border-(--accent) py-1 pl-4 font-serif text-xl">
-              {result.passage.passage}
-            </blockquote>
-          )}
-          <h4 className="mb-2 font-medium">{result.passage.found ? "Explanation" : "Not found"}</h4>
-          <p className="text-slate-300">{result.passage.interpretation}</p>
-          {result.passage.found && (
-            <SaveButton
-              key={result.passage.reference}
-              onSave={() =>
-                saveItem({
-                  faith: result.faith,
-                  type: "scripture",
-                  title: result.passage.reference,
-                  content: `${result.passage.passage}\n\n${result.passage.interpretation}`,
-                })
-              }
-            />
-          )}
+          <Quote citation={result.reading.passage} large />
+          {result.reading.explanation && <p className="mt-4 text-slate-300">{result.reading.explanation}</p>}
+          <SaveButton
+            key={result.reading.passage.reference}
+            onSave={() =>
+              saveItem({
+                faith: result.faith,
+                type: "scripture",
+                title: result.reading.passage.reference,
+                content: `“${result.reading.passage.text}”\n— ${result.reading.passage.translation}\n\n${result.reading.explanation}`,
+              })
+            }
+          />
         </div>
       )}
     </Section>

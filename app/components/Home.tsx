@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react"
 import { FAITH_INFO } from "@/lib/faiths"
 import { AppStateProvider, useAppState } from "../lib/state"
-import { AskQuestion } from "./AskQuestion"
+import { Chat } from "./Chat"
 import { DailyBlessing } from "./DailyBlessing"
 import { ScriptureLookup } from "./ScriptureLookup"
 import { Brand, FaithPicker, LanguagePicker, SavedItems, Sidebar } from "./Sidebar"
@@ -37,8 +37,8 @@ function Shell() {
             <h1 className="text-2xl font-medium text-(--accent)">{info.name}</h1>
             <p className="text-slate-400">{info.greeting}</p>
           </div>
+          <Chat />
           <DailyBlessing />
-          <AskQuestion />
           <ScriptureLookup />
           <div className="md:hidden">
             <SavedItems />

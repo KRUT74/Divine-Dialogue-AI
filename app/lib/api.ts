@@ -1,26 +1,66 @@
 import type { Faith, Language } from "@/lib/faiths"
-import type { Answer, Blessing, Passage } from "@/lib/schemas"
+import type { Blessing, ChatEvent, CompareEvent, Reading } from "@/lib/schemas"
+import type { Work } from "@/lib/works"
 
-async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+async function post(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
   const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal,
   })
-  const data = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(data?.error ?? "Something went wrong. Please try again.")
-  return data as T
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(data?.error ?? "Something went wrong. Please try again.")
+  }
+  return response
+}
+
+async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return (await post(path, body, signal)).json() as Promise<T>
+}
+
+/** Reads a server-sent event stream, calling onEvent for each JSON event. */
+async function readEvents<E>(response: Response, onEvent: (event: E) => void) {
+  const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ""
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += value
+    const events = buffer.split("\n\n")
+    buffer = events.pop() ?? ""
+    for (const event of events) {
+      if (event.startsWith("data: ")) onEvent(JSON.parse(event.slice(6)) as E)
+    }
+  }
 }
 
 export function fetchBlessing(faith: Faith, language: Language, signal?: AbortSignal) {
-  return post<Blessing>("/api/blessing", { faith, language }, signal)
+  return postJson<Blessing>("/api/blessing", { faith, language }, signal)
 }
 
-export function askQuestion(faith: Faith, language: Language, question: string, compare: boolean) {
-  return post<Answer>("/api/question", { faith, language, question, compare })
+export type ChatTurn = { role: "user" | "assistant"; content: string }
+
+export async function streamChat(
+  faith: Faith,
+  language: Language,
+  messages: ChatTurn[],
+  onEvent: (event: ChatEvent) => void,
+  signal?: AbortSignal,
+) {
+  await readEvents(await post("/api/chat", { faith, language, messages }, signal), onEvent)
 }
 
-export function lookUpPassage(faith: Faith, language: Language, source: string, reference: string) {
-  return post<Passage>("/api/scripture", { faith, language, source, reference })
+export async function streamComparison(
+  language: Language,
+  question: string,
+  onEvent: (event: CompareEvent) => void,
+  signal?: AbortSignal,
+) {
+  await readEvents(await post("/api/compare", { language, question }, signal), onEvent)
+}
+
+export function readPassage(faith: Faith, language: Language, work: Work, reference: string) {
+  return postJson<Reading>("/api/scripture", { faith, language, work, reference })
 }

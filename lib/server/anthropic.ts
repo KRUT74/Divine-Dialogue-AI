@@ -28,15 +28,25 @@ const PRICES: Record<string, { input: number; output: number }> = {
 }
 const UNKNOWN_MODEL_PRICE = { input: 10, output: 50 }
 
-type Usage = { input_tokens: number; output_tokens: number }
+type Usage = {
+  input_tokens: number
+  output_tokens: number
+  cache_creation_input_tokens?: number | null
+  cache_read_input_tokens?: number | null
+}
 
 /** Estimates a response's cost in US dollars and logs it. */
 export function logUsage(label: string, response: { model: string; usage: Usage }): number {
   const price = PRICES[response.model] ?? UNKNOWN_MODEL_PRICE
   const { input_tokens, output_tokens } = response.usage
-  const costUsd = (input_tokens * price.input + output_tokens * price.output) / 1_000_000
+  const cacheWrite = response.usage.cache_creation_input_tokens ?? 0
+  const cacheRead = response.usage.cache_read_input_tokens ?? 0
+  // Cache writes cost 1.25x the input rate and cache reads 0.1x.
+  const costUsd =
+    (input_tokens * price.input + cacheWrite * price.input * 1.25 + cacheRead * price.input * 0.1 + output_tokens * price.output) /
+    1_000_000
   console.info(
-    `[usage] ${label} model=${response.model} in=${input_tokens} out=${output_tokens} cost=$${costUsd.toFixed(5)}`,
+    `[usage] ${label} model=${response.model} in=${input_tokens} cache_write=${cacheWrite} cache_read=${cacheRead} out=${output_tokens} cost=$${costUsd.toFixed(5)}`,
   )
   return costUsd
 }

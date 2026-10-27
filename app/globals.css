@@ -38,3 +38,20 @@ body {
   padding-left: 1em;
   font-style: italic;
 }
+.citation-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  margin: 0 0.15em;
+  padding: 0 0.3em;
+  border-radius: 0.4em;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 0.7em;
+  font-weight: 600;
+  vertical-align: super;
+  line-height: 1.4;
+  text-decoration: none;
+}

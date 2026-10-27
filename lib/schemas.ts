@@ -1,52 +1,67 @@
 import { z } from "zod"
 import { FAITHS, LANGUAGES } from "./faiths"
+import { WORK_IDS } from "./works"
 
 const faith = z.enum(FAITHS)
 const language = z.enum(LANGUAGES)
 
+export const MAX_MESSAGE_CHARS = 2000
+export const MAX_HISTORY_MESSAGES = 20
+
 export const BlessingRequest = z.object({ faith, language })
 
-export const QuestionRequest = z.object({
+export const ChatRequest = z.object({
   faith,
   language,
-  question: z.string().trim().min(1).max(1000),
-  compare: z.boolean().default(false),
+  mode: z.enum(["text", "voice"]).default("text"),
+  messages: z
+    .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4 * MAX_MESSAGE_CHARS) }))
+    .min(1)
+    .max(MAX_HISTORY_MESSAGES)
+    .refine((messages) => messages.at(-1)?.role === "user", "The last message must be the visitor's")
+    .refine((messages) => messages.at(-1)!.content.length <= MAX_MESSAGE_CHARS, "Message too long"),
+})
+
+export const CompareRequest = z.object({
+  language,
+  question: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
 })
 
 export const ScriptureRequest = z.object({
   faith,
   language,
-  source: z.string().trim().min(1).max(100),
-  reference: z.string().trim().min(1).max(200),
+  work: z.enum(WORK_IDS),
+  reference: z.string().trim().min(1).max(100),
 })
 
-export const Blessing = z.object({
-  theme: z.string().describe("Two to four words naming today's theme, in the visitor's language"),
-  quote: z.string().describe("A short, well-known passage, quoted only if you are sure of the wording"),
-  source: z.string().describe("Precise reference for the quote, e.g. 'Dhammapada 5'"),
+/** A passage fetched from a real source, shown to the visitor as a citation. */
+export type Citation = {
+  id: number
+  work: string
+  reference: string
+  text: string
+  translation: string
+  url: string
+}
+
+export const BlessingText = z.object({
+  theme: z.string().describe("Two to four words naming the passage's theme, in the visitor's language"),
   reflection: z.string().describe("Two or three sentences applying the passage to daily life"),
 })
 
-export const Comparison = z.object({
-  answer: z.string().describe("The answer from the chosen tradition, in Markdown"),
-  perspectives: z
-    .array(
-      z.object({
-        faith,
-        view: z.string().describe("Two or three sentences on how this tradition approaches the question"),
-      }),
-    )
-    .describe("One entry for each of the other traditions"),
-})
+export type Blessing = z.infer<typeof BlessingText> & { passage: Citation }
 
-export const Passage = z.object({
-  found: z.boolean().describe("False if the reference does not exist or you are unsure of its wording"),
-  reference: z.string().describe("The full, precise reference"),
-  passage: z.string().describe("The passage text, or an empty string when found is false"),
-  interpretation: z.string().describe("A short explanation of the passage, or of why it could not be given"),
-})
+export type Reading = { passage: Citation; explanation: string }
 
-export type Blessing = z.infer<typeof Blessing>
-export type Comparison = z.infer<typeof Comparison>
-export type Passage = z.infer<typeof Passage>
-export type Answer = { answer: string; perspectives?: Comparison["perspectives"] }
+/** Server-sent events from /api/chat. */
+export type ChatEvent =
+  | { type: "text"; text: string }
+  | { type: "citation"; citation: Citation }
+  | { type: "error"; error: string }
+  | { type: "done" }
+
+/** Server-sent events from /api/compare. */
+export type CompareEvent =
+  | { type: "perspective"; faith: (typeof FAITHS)[number]; text: string; citations: Citation[] }
+  | { type: "perspective_error"; faith: (typeof FAITHS)[number] }
+  | { type: "done" }

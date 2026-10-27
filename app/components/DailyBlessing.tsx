@@ -2,11 +2,10 @@
 
 import { Sun } from "lucide-react"
 import { useEffect, useState } from "react"
-import { FAITH_INFO } from "@/lib/faiths"
 import type { Blessing } from "@/lib/schemas"
 import { fetchBlessing } from "../lib/api"
 import { useAppState } from "../lib/state"
-import { ErrorMessage, Loading, SaveButton, Section } from "./ui"
+import { ErrorMessage, Loading, Quote, SaveButton, Section } from "./ui"
 
 type Status = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; blessing: Blessing }
 
@@ -27,39 +26,26 @@ export function DailyBlessing() {
     return () => controller.abort()
   }, [faith, language, attempt])
 
-  const info = FAITH_INFO[faith]
-
   return (
-    <Section icon={Sun} title="Daily Blessing">
+    <Section icon={Sun} title="Today's Blessing">
       {status.state === "loading" && <Loading label="Loading today's blessing" />}
       {status.state === "error" && <ErrorMessage message={status.message} onRetry={() => setAttempt((n) => n + 1)} />}
       {status.state === "ready" && (
-        <div className="flex items-start gap-6">
-          <div className="flex-1">
-            <p className="mb-2 text-sm text-slate-400">{status.blessing.theme}</p>
-            <blockquote className="mb-3 font-serif text-xl leading-relaxed text-white">
-              “{status.blessing.quote}”
-            </blockquote>
-            <p className="mb-4 font-serif text-base text-slate-300 italic">— {status.blessing.source}</p>
-            <p className="text-slate-300">{status.blessing.reflection}</p>
-            <SaveButton
-              key={status.blessing.quote}
-              onSave={() =>
-                saveItem({
-                  faith,
-                  type: "blessing",
-                  title: status.blessing.theme,
-                  content: `“${status.blessing.quote}”\n— ${status.blessing.source}\n\n${status.blessing.reflection}`,
-                })
-              }
-            />
-          </div>
-          <div
-            aria-hidden
-            className="hidden size-20 items-center justify-center rounded-full bg-(--primary) text-4xl text-(--accent) md:flex"
-          >
-            {info.symbol}
-          </div>
+        <div>
+          <p className="mb-3 text-sm tracking-wide text-slate-400 uppercase">{status.blessing.theme}</p>
+          <Quote citation={status.blessing.passage} large />
+          <p className="mt-4 text-slate-300">{status.blessing.reflection}</p>
+          <SaveButton
+            key={status.blessing.passage.reference}
+            onSave={() =>
+              saveItem({
+                faith,
+                type: "blessing",
+                title: status.blessing.theme,
+                content: `“${status.blessing.passage.text}”\n— ${status.blessing.passage.reference} (${status.blessing.passage.translation})\n\n${status.blessing.reflection}`,
+              })
+            }
+          />
         </div>
       )}
     </Section>
