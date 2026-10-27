@@ -381,7 +381,15 @@ function Allowance({ usage }: { usage: Usage }) {
     : `${remaining.chat} ${remaining.chat === 1 ? "question" : "questions"} · ${remaining.compare} six-way · ${remaining.voice} voice left${plus ? "" : " today"}`
   return (
     <p className="mt-1 px-2 text-xs text-muted">
-      {plus && <span className="text-gold-text">✦ Plus · </span>}
+      {plus && (
+        <span className="text-gold-text">
+          ✦ Plus
+          {usage.cancelsAtPeriodEnd && usage.renewsAt
+            ? ` until ${new Date(usage.renewsAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
+            : ""}
+          {" · "}
+        </span>
+      )}
       {text}
       {!plus && (
         <>

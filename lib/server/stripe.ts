@@ -118,15 +118,17 @@ export async function createPortal(accountId: string, origin: string): Promise<s
 export async function syncCustomer(customerId: string) {
   const { data: subscriptions } = await stripe().subscriptions.list({ customer: customerId, status: "all", limit: 1 })
   const subscription = subscriptions[0]
+  const item = subscription?.items.data[0]
+  // Cancelling in the Customer Portal sets cancel_at (a date) in current API versions;
+  // older ones set cancel_at_period_end. Either way, Plus ends on that date.
+  const endsAt = subscription?.cancel_at ?? item?.current_period_end
   const update = subscription
     ? {
         stripe_subscription_id: subscription.id,
         status: subscription.status,
-        price_id: subscription.items.data[0]?.price.id ?? null,
-        current_period_end: subscription.items.data[0]
-          ? new Date(subscription.items.data[0].current_period_end * 1000).toISOString()
-          : null,
-        cancel_at_period_end: subscription.cancel_at_period_end,
+        price_id: item?.price.id ?? null,
+        current_period_end: endsAt ? new Date(endsAt * 1000).toISOString() : null,
+        cancel_at_period_end: subscription.cancel_at_period_end || subscription.cancel_at !== null,
         updated_at: new Date().toISOString(),
       }
     : { status: "none", updated_at: new Date().toISOString() }
