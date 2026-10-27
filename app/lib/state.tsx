@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { isFaith, isLanguage, type Faith, type Language } from "@/lib/faiths"
+import type { Usage } from "@/lib/schemas"
+import { fetchUsage } from "./api"
 
 export type SavedItem = {
   id: string
@@ -20,6 +22,9 @@ type AppState = {
   savedItems: SavedItem[]
   saveItem: (item: Omit<SavedItem, "id" | "savedAt">) => void
   removeItem: (id: string) => void
+  /** Today's free allowance, or null until loaded (or if it couldn't be). */
+  usage: Usage | null
+  refreshUsage: () => void
 }
 
 const AppStateContext = createContext<AppState | null>(null)
@@ -42,6 +47,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>("english")
   const [savedItems, setSavedItems] = useState<SavedItem[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [usage, setUsage] = useState<Usage | null>(null)
+
+  const refreshUsage = useCallback(() => {
+    void fetchUsage().then(setUsage)
+  }, [])
+
+  useEffect(refreshUsage, [refreshUsage])
 
   useEffect(() => {
     const stored = readStored()
@@ -72,8 +84,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ faith, language, setFaith, setLanguage, savedItems, saveItem, removeItem }),
-    [faith, language, savedItems, saveItem, removeItem],
+    () => ({ faith, language, setFaith, setLanguage, savedItems, saveItem, removeItem, usage, refreshUsage }),
+    [faith, language, savedItems, saveItem, removeItem, usage, refreshUsage],
   )
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>

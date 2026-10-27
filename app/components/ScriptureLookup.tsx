@@ -12,7 +12,7 @@ import { ErrorMessage, Loading, Placeholder, Quote, SaveButton, Section } from "
 type Result = { faith: Faith; reading: Reading }
 
 export function ScriptureLookup() {
-  const { faith, language, saveItem } = useAppState()
+  const { faith, language, saveItem, refreshUsage } = useAppState()
   const works = FAITH_WORKS[faith]
   const [chosenWork, setWork] = useState<Work | null>(null)
   const [reference, setReference] = useState("")
@@ -33,6 +33,7 @@ export function ScriptureLookup() {
     } catch (err) {
       setError((err as Error).message)
     } finally {
+      refreshUsage()
       setLoading(false)
     }
   }

@@ -65,3 +65,9 @@ export type CompareEvent =
   | { type: "perspective"; faith: (typeof FAITHS)[number]; text: string; citations: Citation[] }
   | { type: "perspective_error"; faith: (typeof FAITHS)[number] }
   | { type: "done" }
+
+/** Features with a free daily allowance. */
+export type Feature = "chat" | "voice" | "compare" | "read"
+
+/** What a visitor has left today. */
+export type Usage = { limits: Record<Feature, number>; remaining: Record<Feature, number>; paused: boolean }

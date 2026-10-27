@@ -29,6 +29,29 @@ pnpm dev
 
 Without a key the app still loads and shows a friendly "not configured" message.
 
+Voice needs an ElevenLabs key with Text to Speech and Speech to Text access (`ELEVENLABS_API_KEY`).
+
+## Free limits and spending safety
+
+Every visitor gets an anonymous, signed cookie (`SESSION_SECRET`). Each paid action is logged with
+its estimated cost in a Supabase table, and the server checks it before calling Claude or ElevenLabs:
+
+| Free each day | Default |
+|---|---|
+| Typed questions | 10 |
+| Voice replies | 3 |
+| "Ask all six traditions" | 2 |
+| Passage explanations | 10 |
+
+On top of that: 6 requests a minute per visitor, $0.40 a day per visitor, per-network caps that
+survive clearing cookies, and a $3 daily ceiling across everyone, after which AI features pause.
+All are adjustable by environment variable (see `.env.example`). If the usage database can't be
+reached, AI features are refused rather than left unguarded.
+
+To set it up, create a free Supabase project, run `supabase/migrations/20261027200000_usage.sql`
+in its SQL Editor, and set `SUPABASE_URL` and `SUPABASE_SECRET_KEY`. Locally, without Supabase,
+limits are switched off (with a warning); in production they are required.
+
 ## Checks
 
 ```bash

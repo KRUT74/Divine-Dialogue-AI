@@ -1,6 +1,9 @@
 import type { Faith, Language } from "@/lib/faiths"
-import type { Blessing, ChatEvent, CompareEvent, Reading } from "@/lib/schemas"
+import type { Blessing, ChatEvent, CompareEvent, Reading, Usage } from "@/lib/schemas"
 import type { Work } from "@/lib/works"
+
+/** The visitor has used up a free allowance (the message says which, and when to come back). */
+export class LimitReachedError extends Error {}
 
 async function post(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
   const response = await fetch(path, {
@@ -11,7 +14,8 @@ async function post(path: string, body: unknown, signal?: AbortSignal): Promise<
   })
   if (!response.ok) {
     const data = await response.json().catch(() => null)
-    throw new Error(data?.error ?? "Something went wrong. Please try again.")
+    const message = data?.error ?? "Something went wrong. Please try again."
+    throw response.status === 429 ? new LimitReachedError(message) : new Error(message)
   }
   return response
 }
@@ -60,6 +64,11 @@ export async function streamComparison(
   signal?: AbortSignal,
 ) {
   await readEvents(await post("/api/compare", { language, question }, signal), onEvent)
+}
+
+export async function fetchUsage(): Promise<Usage | null> {
+  const response = await fetch("/api/usage", { cache: "no-store" }).catch(() => null)
+  return response?.ok ? ((await response.json()) as Usage) : null
 }
 
 export function readPassage(faith: Faith, language: Language, work: Work, reference: string) {

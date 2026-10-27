@@ -3,8 +3,8 @@
 import { ArrowUp, Layers, Mic, RotateCcw } from "lucide-react"
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import { FAITH_INFO, FAITHS, type Faith } from "@/lib/faiths"
-import { MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS, type Citation } from "@/lib/schemas"
-import { streamChat, streamComparison, type ChatTurn } from "../lib/api"
+import { MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS, type Citation, type Usage } from "@/lib/schemas"
+import { LimitReachedError, streamChat, streamComparison, type ChatTurn } from "../lib/api"
 import { useAppState } from "../lib/state"
 import { useVoiceConversation } from "../lib/voice/useVoiceConversation"
 import { CitationList, faithStyle, Loading, Markdown, SaveButton } from "./ui"
@@ -43,10 +43,13 @@ function historyFrom(entries: Entry[]): ChatTurn[] {
 }
 
 export function Chat() {
-  const { faith, language, saveItem } = useAppState()
+  const { faith, language, saveItem, usage, refreshUsage } = useAppState()
+  // Lets a reply that hits the voice limit end the voice conversation (voice is defined below).
+  const stopVoiceRef = useRef<(reason?: string) => void>(() => {})
   const [conversations, setConversations] = useState<Partial<Record<Faith, Entry[]>>>({})
   const [draft, setDraft] = useState("")
   const [busy, setBusy] = useState(false)
+  const [compareError, setCompareError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const entries = conversations[faith] ?? []
   const info = FAITH_INFO[faith]
@@ -86,7 +89,9 @@ export function Chat() {
     } catch (error) {
       failed = true
       update(target, reply.id, (e) => (e.kind === "guide" ? { ...e, status: "error", error: (error as Error).message } : e))
+      if (error instanceof LimitReachedError && mode === "voice") stopVoiceRef.current(error.message)
     }
+    refreshUsage()
     return failed ? null : text
   }
 
@@ -101,10 +106,16 @@ export function Chat() {
         if (event.type === "perspective") settle(event.faith, { text: event.text, citations: event.citations })
         if (event.type === "perspective_error") settle(event.faith, "error")
       })
-    } catch {
+    } catch (error) {
+      if (error instanceof LimitReachedError) {
+        setConversations((all) => ({ ...all, [target]: (all[target] ?? []).filter((e) => e.id !== entry.id) }))
+        setCompareError(error.message)
+        return
+      }
       for (const f of FAITHS) update(target, entry.id, (e) => (e.kind === "compare" && !e.results[f] ? { ...e, results: { ...e.results, [f]: "error" } } : e))
     }
     update(target, entry.id, (e) => (e.kind === "compare" ? { ...e, done: true } : e))
+    refreshUsage()
   }
 
   const voice = useVoiceConversation({
@@ -120,6 +131,9 @@ export function Chat() {
   })
   const voiceActive = voice.status !== "idle"
   const stopVoice = voice.stop
+  useEffect(() => {
+    stopVoiceRef.current = stopVoice
+  }, [stopVoice])
 
   // A voice conversation belongs to one guide and language; switching either ends it.
   useEffect(() => stopVoice(), [faith, language, stopVoice])
@@ -127,6 +141,7 @@ export function Chat() {
   async function submit(mode: "guide" | "compare", text = draft) {
     const question = text.trim()
     if (!question || busy) return
+    setCompareError(null)
     setDraft("")
     setBusy(true)
     try {
@@ -185,6 +200,11 @@ export function Chat() {
       </div>
 
       <div className="sticky bottom-0 z-10 -mx-5 mt-8 bg-linear-to-t from-paper from-75% to-transparent px-5 pt-6 pb-4 sm:-mx-6 sm:px-6">
+        {compareError && (
+          <p role="alert" className="mb-3 rounded-lg border border-line bg-raised px-4 py-3 text-sm text-danger">
+            {compareError}
+          </p>
+        )}
         {voice.error && (
           <p role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-line bg-raised px-4 py-3 text-sm text-danger">
             {voice.error}
@@ -260,6 +280,7 @@ export function Chat() {
                 </button>
               )}
             </div>
+            {usage && <Allowance usage={usage} />}
           </form>
         )}
       </div>
@@ -348,4 +369,13 @@ function Comparison({ entry }: { entry: Extract<Entry, { kind: "compare" }> }) {
       </div>
     </article>
   )
+}
+
+/** A quiet note of what's left of today's free allowance. */
+function Allowance({ usage }: { usage: Usage }) {
+  const { remaining } = usage
+  const text = usage.paused
+    ? "Today's free limit is reached"
+    : `${remaining.chat} ${remaining.chat === 1 ? "question" : "questions"} · ${remaining.compare} six-way · ${remaining.voice} voice left today`
+  return <p className="mt-1 px-2 text-xs text-muted">{text}</p>
 }

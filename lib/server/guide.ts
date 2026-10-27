@@ -7,6 +7,7 @@ import { BlessingText, type Blessing, type Citation } from "@/lib/schemas"
 import { FAITH_WORKS, WORK_IDS, WORKS } from "@/lib/works"
 import { anthropic, BLESSING_MODEL, GUIDE_MODEL, logUsage } from "./anthropic"
 import { blessingPassageFor } from "./blessings"
+import { record } from "./limits"
 import { getPassage } from "./scripture"
 
 const PRINCIPLES = `How you work:
@@ -244,7 +245,8 @@ async function writeBlessing(faith: Faith, language: Language, today: string): P
       },
     ],
   })
-  logUsage("blessing", response)
+  // Shared by every visitor, so it counts toward the overall ceiling but nobody's allowance.
+  await record("blessing", null, logUsage("blessing", response))
   if (!response.parsed_output) throw new Error(`Blessing was not parsed (stop reason: ${response.stop_reason})`)
   return { ...response.parsed_output, passage: { id: 1, ...passage } }
 }
@@ -252,7 +254,7 @@ async function writeBlessing(faith: Faith, language: Language, today: string): P
 const MAX_EXPLANATION_TOKENS = 1024
 
 /** Explains a passage that has already been fetched from its source. */
-export async function explainPassage(faith: Faith, language: Language, passage: Citation): Promise<string> {
+export async function explainPassage(faith: Faith, language: Language, passage: Citation): Promise<{ text: string; costUsd: number }> {
   const response = await anthropic().beta.messages.create({
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
@@ -262,10 +264,11 @@ export async function explainPassage(faith: Faith, language: Language, passage: 
     system: `${guidePrompt(faith, language, { quoting: false })}\n\nThe visitor is reading a passage. In about 120 words, explain its context and how it is commonly understood, noting where interpretations differ. Don't repeat the passage itself. Use plain paragraphs, no headings.`,
     messages: [{ role: "user", content: `${passage.reference} (${passage.translation}):\n"${passage.text}"` }],
   })
-  logUsage("explain", response)
-  if (response.stop_reason === "refusal") return ""
-  return response.content
+  const costUsd = logUsage("explain", response)
+  if (response.stop_reason === "refusal") return { text: "", costUsd }
+  const text = response.content
     .flatMap((block) => (block.type === "text" ? [block.text] : []))
     .join("")
     .trim()
+  return { text, costUsd }
 }
