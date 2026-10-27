@@ -52,6 +52,31 @@ To set it up, create a free Supabase project, run `supabase/migrations/202610272
 in its SQL Editor, and set `SUPABASE_URL` and `SUPABASE_SECRET_KEY`. Locally, without Supabase,
 limits are switched off (with a warning); in production they are required.
 
+## Divine Dialogue Plus (Stripe, test mode)
+
+Plus is a €4.99/month subscription that raises the daily allowances (100 questions, 40 voice
+replies up to 200 a month, 20 comparisons, 50 passages). It runs entirely in **Stripe test mode**:
+the server refuses a live key unless `ALLOW_LIVE_PAYMENTS=true` is set on purpose.
+
+- **Checkout:** signed-in visitors upgrade through Stripe Checkout; the price is found by its
+  lookup key, so no price ID needs configuring.
+- **Webhooks:** `/api/stripe/webhook` verifies Stripe's signature and copies the subscription's
+  status into Supabase. Returning from Checkout also syncs, so Plus applies at once.
+- **Billing portal:** members change their card, see invoices or cancel in Stripe's Customer Portal.
+
+Setup, in a Stripe sandbox:
+
+```bash
+# 1. Put the sandbox's sk_test_ key in .env.local as STRIPE_SECRET_KEY
+# 2. Create the Plus product, price and portal settings (safe to re-run)
+pnpm stripe:setup
+# 3. Run supabase/migrations/20261028100000_subscriptions.sql in the Supabase SQL Editor
+# 4. Locally, forward webhooks (prints the whsec_ secret for STRIPE_WEBHOOK_SECRET)
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+```
+
+Test card: `4242 4242 4242 4242`, any future date, any CVC.
+
 ## Checks
 
 ```bash

@@ -371,11 +371,26 @@ function Comparison({ entry }: { entry: Extract<Entry, { kind: "compare" }> }) {
   )
 }
 
-/** A quiet note of what's left of today's free allowance. */
+/** A quiet note of what's left of today's allowance, with a way to upgrade. */
 function Allowance({ usage }: { usage: Usage }) {
+  const { setPlusOpen } = useAppState()
   const { remaining } = usage
+  const plus = usage.plan === "plus"
   const text = usage.paused
-    ? "Today's free limit is reached"
-    : `${remaining.chat} ${remaining.chat === 1 ? "question" : "questions"} · ${remaining.compare} six-way · ${remaining.voice} voice left today`
-  return <p className="mt-1 px-2 text-xs text-muted">{text}</p>
+    ? `Today's ${plus ? "" : "free "}limit is reached`
+    : `${remaining.chat} ${remaining.chat === 1 ? "question" : "questions"} · ${remaining.compare} six-way · ${remaining.voice} voice left${plus ? "" : " today"}`
+  return (
+    <p className="mt-1 px-2 text-xs text-muted">
+      {plus && <span className="text-gold-text">✦ Plus · </span>}
+      {text}
+      {!plus && (
+        <>
+          {" · "}
+          <button type="button" onClick={() => setPlusOpen(true)} className="text-gold-text underline-offset-2 hover:underline">
+            Get more with Plus
+          </button>
+        </>
+      )}
+    </p>
+  )
 }

@@ -70,7 +70,16 @@ export type CompareEvent =
 export type Feature = "chat" | "voice" | "compare" | "read"
 
 /** What a visitor has left today. */
-export type Usage = { limits: Record<Feature, number>; remaining: Record<Feature, number>; paused: boolean }
+export type Usage = {
+  plan: "free" | "plus"
+  limits: Record<Feature, number>
+  remaining: Record<Feature, number>
+  /** True when today's spending limit is reached, so every feature is paused. */
+  paused: boolean
+  /** Plus only: when the subscription renews or, if cancelled, ends (ISO date). */
+  renewsAt?: string
+  cancelsAtPeriodEnd?: boolean
+}
 
 export const SavedItemSchema = z.object({
   id: z.uuid(),

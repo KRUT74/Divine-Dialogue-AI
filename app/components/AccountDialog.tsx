@@ -22,7 +22,7 @@ export function AccountDialog() {
         className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm text-muted hover:text-ink"
       >
         <CircleUser aria-hidden className="size-4" />
-        <span className={account ? "sr-only sm:not-sr-only" : undefined}>{account ? "Account" : "Sign in"}</span>
+        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">{account ? "Account" : "Sign in"}</span>
       </button>
       <dialog
         ref={dialogRef}
@@ -70,7 +70,7 @@ function SignedIn({ headingId, email, onDone }: { headingId: string; email: stri
   )
 }
 
-function SignIn({ headingId, onDone }: { headingId: string; onDone: () => void }) {
+export function SignIn({ headingId, onDone, intro }: { headingId: string; onDone: () => void; intro?: string }) {
   const { savedItems, signedIn } = useAppState()
   const [step, setStep] = useState<"email" | "code">("email")
   const [email, setEmail] = useState("")
@@ -179,7 +179,7 @@ function SignIn({ headingId, onDone }: { headingId: string; onDone: () => void }
         Sign in to Divine Dialogue
       </h2>
       <p className="mt-2 font-serif text-lg text-ink/85 italic">
-        Keep your saved passages and answers on every device. No password: we email you a code.
+        {intro ?? "Keep your saved passages and answers on every device. No password: we email you a code."}
       </p>
       <label htmlFor="sign-in-email" className="sr-only">
         Email address

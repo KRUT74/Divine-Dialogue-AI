@@ -93,6 +93,19 @@ export function verifySignInCode(email: string, code: string, savedItems: SavedI
   return postJson<{ account: NonNullable<AccountInfo>; savedItems: SavedItem[] }>("/api/auth/verify", { email, code, savedItems })
 }
 
+/** Returns the Stripe page to go to: Checkout for a new member, the billing portal for an existing one. */
+export async function startCheckout(): Promise<string> {
+  return (await postJson<{ url: string }>("/api/plus/checkout", {})).url
+}
+
+export async function openBillingPortal(): Promise<string> {
+  return (await postJson<{ url: string }>("/api/plus/portal", {})).url
+}
+
+export async function syncCheckout(sessionId: string) {
+  await post("/api/plus/sync", { sessionId }).catch(() => {})
+}
+
 export async function signOut() {
   await post("/api/auth/sign-out", {})
 }

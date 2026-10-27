@@ -1,8 +1,8 @@
 "use client"
 
-import { Bookmark, Trash2, X } from "lucide-react"
+import { Bookmark, Globe, Trash2, X } from "lucide-react"
 import { useEffect, useId, useRef } from "react"
-import { FAITH_INFO, FAITHS, LANGUAGE_LABELS, LANGUAGES, type Language } from "@/lib/faiths"
+import { FAITH_INFO, FAITHS, LANGUAGE_CODES, LANGUAGE_LABELS, LANGUAGES, type Language } from "@/lib/faiths"
 import { cn } from "@/lib/utils"
 import { useAppState } from "../lib/state"
 import { AccountDialog } from "./AccountDialog"
@@ -18,14 +18,37 @@ export function Header() {
           </span>
           Divine Dialogue
         </p>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center sm:gap-1">
           <LanguagePicker />
           <SavedDrawer />
           <AccountDialog />
+          <PlusButton />
         </div>
       </div>
       <FaithPicker />
     </header>
+  )
+}
+
+function PlusButton() {
+  const { usage, setPlusOpen } = useAppState()
+  const isPlus = usage?.plan === "plus"
+  return (
+    <button
+      type="button"
+      onClick={() => setPlusOpen(true)}
+      className={cn(
+        "ml-1 rounded-full border px-2.5 py-1 text-sm whitespace-nowrap",
+        isPlus ? "border-gold/60 text-gold-text" : "border-gold/60 text-gold-text hover:bg-gold/10",
+      )}
+    >
+      <span aria-hidden>✦ </span>
+      {isPlus ? "Plus" : (
+        <>
+          <span className="hidden sm:inline">Go </span>Plus
+        </>
+      )}
+    </button>
   )
 }
 
@@ -76,18 +99,28 @@ function LanguagePicker() {
       <label htmlFor={id} className="sr-only">
         Language
       </label>
-      <select
-        id={id}
-        value={language}
-        onChange={(e) => setLanguage(e.target.value as Language)}
-        className="rounded-full bg-transparent px-2 py-1.5 text-sm text-muted hover:text-ink"
-      >
-        {LANGUAGES.map((lang) => (
-          <option key={lang} value={lang}>
-            {LANGUAGE_LABELS[lang]}
-          </option>
-        ))}
-      </select>
+      {/* The real select sits invisibly on top, so it stays fully usable; on a phone only "EN" shows. */}
+      <span className="relative flex items-center gap-1 rounded-full px-2 py-1.5 text-sm text-muted focus-within:outline-2 focus-within:outline-(--accent) hover:text-ink">
+        <Globe aria-hidden className="size-4" />
+        <span aria-hidden className="uppercase sm:hidden">
+          {LANGUAGE_CODES[language]}
+        </span>
+        <span aria-hidden className="hidden sm:inline">
+          {LANGUAGE_LABELS[language]}
+        </span>
+        <select
+          id={id}
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as Language)}
+          className="absolute inset-0 cursor-pointer opacity-0"
+        >
+          {LANGUAGES.map((lang) => (
+            <option key={lang} value={lang}>
+              {LANGUAGE_LABELS[lang]}
+            </option>
+          ))}
+        </select>
+      </span>
     </>
   )
 }

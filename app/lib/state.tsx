@@ -23,6 +23,9 @@ type AppState = {
   /** Call after a successful sign-in with the account's saved items from the server. */
   signedIn: (account: NonNullable<AccountInfo>, savedItems: SavedItem[]) => void
   signOut: () => Promise<void>
+  /** The Plus panel, which can be opened from anywhere (header, allowance line, limit messages). */
+  plusOpen: boolean
+  setPlusOpen: (open: boolean) => void
 }
 
 const AppStateContext = createContext<AppState | null>(null)
@@ -59,6 +62,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false)
   const [usage, setUsage] = useState<Usage | null>(null)
   const [account, setAccount] = useState<AccountInfo | undefined>(undefined)
+  const [plusOpen, setPlusOpen] = useState(false)
 
   const refreshUsage = useCallback(() => {
     void fetchMe().then((me) => me && setUsage(me.usage))
@@ -144,8 +148,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       account,
       signedIn,
       signOut,
+      plusOpen,
+      setPlusOpen,
     }),
-    [faith, language, savedItems, saveItem, removeItem, usage, refreshUsage, account, signedIn, signOut],
+    [faith, language, savedItems, saveItem, removeItem, usage, refreshUsage, account, signedIn, signOut, plusOpen],
   )
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>

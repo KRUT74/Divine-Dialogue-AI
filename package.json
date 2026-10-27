@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check:sources": "tsx --conditions=react-server scripts/check-sources.ts",
-    "build:secular": "node scripts/build-secular.mjs"
+    "build:secular": "node scripts/build-secular.mjs",
+    "stripe:setup": "tsx --env-file=.env.local scripts/stripe-setup.ts",
+    "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.3.0",
@@ -25,6 +27,7 @@
     "react-markdown": "10.1.0",
     "resend": "6.34.1",
     "server-only": "0.0.1",
+    "stripe": "23.0.0",
     "tailwind-merge": "3.7.0",
     "zod": "4.6.7"
   },
