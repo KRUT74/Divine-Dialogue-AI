@@ -34,7 +34,7 @@ const NO_SIGNAL =
 const NO_WORDS = "I can hear sound but no words yet. Go ahead and speak, a little closer to the microphone if you can."
 
 /** Turns a getUserMedia failure into a message that says what to do about it. */
-function microphoneErrorMessage(error: unknown): string {
+export function microphoneErrorMessage(error: unknown): string {
   const name = error instanceof DOMException ? error.name : ""
   switch (name) {
     case "NotAllowedError":
