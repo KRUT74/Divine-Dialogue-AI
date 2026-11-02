@@ -1,15 +1,20 @@
 import { createListeningToken, LISTENING_MODEL, LISTENING_SESSION_MINUTES, MissingVoiceKeyError } from "@/lib/server/elevenlabs"
-import { checkSpendAllowed, guard, record } from "@/lib/server/limits"
+import { checkAllowed, checkSpendAllowed, guard, record } from "@/lib/server/limits"
 import { getVisitor } from "@/lib/server/visitor"
 
 /**
  * Mints a single-use token for one Scribe realtime listening session. The client
  * asks for a new one between turns once LISTENING_SESSION_MINUTES have passed.
  * Each token is charged up front as that many minutes of listening.
+ * With ?for=search it's for speaking a passage search, which uses the reading
+ * allowance rather than voice replies.
  */
 export async function GET(req: Request) {
   const visitor = await getVisitor(req)
-  const refused = await guard(() => checkSpendAllowed(visitor, { needsVoiceReply: true }))
+  const forSearch = new URL(req.url).searchParams.get("for") === "search"
+  const refused = await guard(() =>
+    forSearch ? checkAllowed(visitor, "read") : checkSpendAllowed(visitor, { needsVoiceReply: true }),
+  )
   if (refused) return refused
 
   try {

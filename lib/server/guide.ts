@@ -4,7 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod"
 import { z } from "zod"
 import { FAITH_INFO, LANGUAGE_LABELS, type Faith, type Language } from "@/lib/faiths"
 import { BlessingText, type Blessing, type Citation } from "@/lib/schemas"
-import { FAITH_WORKS, WORK_IDS, WORKS } from "@/lib/works"
+import { FAITH_WORKS, WORK_IDS, WORKS, type Work } from "@/lib/works"
 import { anthropic, BLESSING_MODEL, GUIDE_MODEL, logUsage } from "./anthropic"
 import { blessingPassageFor } from "./blessings"
 import { record } from "./limits"
@@ -249,6 +249,57 @@ async function writeBlessing(faith: Faith, language: Language, today: string): P
   await record("blessing", null, logUsage("blessing", response))
   if (!response.parsed_output) throw new Error(`Blessing was not parsed (stop reason: ${response.stop_reason})`)
   return { ...response.parsed_output, passage: { id: 1, ...passage } }
+}
+
+const PassageCandidates = z.object({
+  passages: z.array(z.object({ work: z.enum(WORK_IDS), reference: z.string() })).max(3),
+})
+
+/**
+ * Turns remembered words or a topic into likely references. Claude only names the
+ * references; the text itself is always fetched from the published source.
+ */
+export async function findPassageReferences(
+  faith: Faith,
+  preferred: Work,
+  search: string,
+): Promise<{ candidates: { work: Work; reference: string }[]; costUsd: number }> {
+  const works = FAITH_WORKS[faith]
+  const formats = works.map((work) => `- ${work}: ${WORKS[work].label}. ${WORKS[work].help}.`).join("\n")
+  const response = await anthropic().messages.parse({
+    model: GUIDE_MODEL,
+    max_tokens: 512,
+    output_config: { effort: "low", format: zodOutputFormat(PassageCandidates) },
+    system: `You find passages in the texts of ${FAITH_INFO[faith].name}. The visitor gives words they remember (possibly paraphrased, misremembered or in another language), a topic, or a loose reference. Name up to three passages that best match, most likely first, each at most 8 verses long. Prefer ${WORKS[preferred].label} when it has a good match. Use only these texts and their reference formats:\n${formats}\nGive references you are confident exist. If nothing fits, return an empty list.`,
+    messages: [{ role: "user", content: search }],
+  })
+  const costUsd = logUsage("find-passage", response)
+  const candidates = (response.parsed_output?.passages ?? []).filter((c) => works.includes(c.work))
+  return { candidates, costUsd }
+}
+
+const PassageChoice = z.object({ match: z.number().int() })
+
+/**
+ * Checks fetched passages against what the visitor asked for, since a remembered
+ * reference can be wrong. Returns the index of the best match, or -1 if none fits.
+ */
+export async function chooseMatchingPassage(
+  search: string,
+  passages: Omit<Citation, "id">[],
+): Promise<{ index: number; costUsd: number }> {
+  const listed = passages.map((p, i) => `[${i}] ${p.reference}: "${p.text}"`).join("\n\n")
+  const response = await anthropic().messages.parse({
+    model: BLESSING_MODEL,
+    max_tokens: 256,
+    output_config: { effort: "low", format: zodOutputFormat(PassageChoice) },
+    system:
+      "A visitor searched for a passage by words they remember or a theme. Pick the passage that is what they were looking for: it contains those words (allowing for a different translation or paraphrase), or it is clearly about that theme or traditionally tied to that story. Answer with its number, or -1 if none of them fits.",
+    messages: [{ role: "user", content: `Search: ${search}\n\nPassages:\n${listed}` }],
+  })
+  const costUsd = logUsage("match-passage", response)
+  const index = response.parsed_output?.match ?? -1
+  return { index: index >= 0 && index < passages.length ? index : -1, costUsd }
 }
 
 const MAX_EXPLANATION_TOKENS = 1024

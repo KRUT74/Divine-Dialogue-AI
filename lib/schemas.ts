@@ -31,7 +31,8 @@ export const ScriptureRequest = z.object({
   faith,
   language,
   work: z.enum(WORK_IDS),
-  reference: z.string().trim().min(1).max(100),
+  /** A reference like "Matthew 5:9", or words, a phrase or a topic to search for. */
+  reference: z.string().trim().min(1).max(200),
 })
 
 /** A passage fetched from a real source, shown to the visitor as a citation. */
