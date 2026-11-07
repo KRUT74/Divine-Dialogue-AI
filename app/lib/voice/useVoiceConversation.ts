@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { CommitStrategy, RealtimeEvents, Scribe, type RealtimeConnection } from "@elevenlabs/client"
 import { LANGUAGE_CODES, type Language } from "@/lib/faiths"
 import { SpeechQueue } from "./speechQueue"
+import { claimVoice } from "./voiceOwner"
 
 export type VoiceStatus = "idle" | "connecting" | "listening" | "thinking" | "speaking"
 
@@ -271,6 +272,8 @@ export function useVoiceConversation({ language, send }: VoiceOptions) {
       setError("This browser doesn't support voice conversations. Try a recent Chrome, Edge, Safari or Firefox.")
       return
     }
+
+    claimVoice(stop)
 
     // Created inside the click, before any await, so the browser lets it run.
     const meterContext = new AudioContext()
