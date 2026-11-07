@@ -1,16 +1,43 @@
 "use client"
 
-import { Mic, Search, Square } from "lucide-react"
-import { useState, type FormEvent } from "react"
-import { FAITH_INFO, type Faith } from "@/lib/faiths"
+import { Mic, Search, Square, Volume2 } from "lucide-react"
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
+import { FAITH_INFO, type Faith, type Language } from "@/lib/faiths"
 import type { Reading } from "@/lib/schemas"
 import { FAITH_WORKS, WORKS, type Work } from "@/lib/works"
 import { readPassage } from "../lib/api"
 import { useAppState } from "../lib/state"
 import { useDictation } from "../lib/voice/useDictation"
+import { useReadAloud } from "../lib/voice/useReadAloud"
+import { claimVoice } from "../lib/voice/voiceOwner"
 import { ErrorMessage, Loading, Placeholder, Quote, SaveButton, Section } from "./ui"
 
-type Result = { faith: Faith; reading: Reading }
+type Result = { faith: Faith; language: Language; reading: Reading }
+
+const SPOKEN_REFERENCE: Record<Language, { to: string; verse: string; verses: string; chapter: string; surah: string; book: string; section: string; sections: string }> = {
+  english: { to: "to", verse: "verse", verses: "verses", chapter: "chapter", surah: "surah", book: "book", section: "section", sections: "sections" },
+  spanish: { to: "a", verse: "versículo", verses: "versículos", chapter: "capítulo", surah: "sura", book: "libro", section: "sección", sections: "secciones" },
+}
+
+/** "Quran 94:5-6 (Ash-Sharh)" becomes "Quran surah 94, verses 5 to 6", so it isn't read as a string of numbers. */
+function spokenReference(reference: string, work: string, language: Language) {
+  const words = SPOKEN_REFERENCE[language]
+  const [major, one, many] =
+    work === "meditations" ? [words.book, words.section, words.sections] : [work === "quran" ? words.surah : words.chapter, words.verse, words.verses]
+  return reference
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/\b(\d+)[:.](\d+)(?:\s*[-–]\s*(\d+))?/, (_, chapter, from, to) =>
+      to ? `${major} ${chapter}, ${many} ${from} ${words.to} ${to}` : `${major} ${chapter}, ${one} ${from}`,
+    )
+    .replace(/\b(\d+)\s*[-–]\s*(\d+)\b/, `$1 ${words.to} $2`)
+}
+
+/** What is read aloud: the reference, the passage, then the explanation. */
+function spokenReading({ passage, explanation }: Reading, language: Language) {
+  const text = passage.text.replace(/[[\]]/g, "").trim()
+  const sentence = (part: string) => (/[.!?…]["'”’)\]]*$/.test(part) ? part : `${part}.`)
+  return [sentence(spokenReference(passage.reference, passage.work, language)), sentence(text), explanation].filter(Boolean).join(" ")
+}
 
 export function ScriptureLookup() {
   const { faith, language, saveItem, refreshUsage } = useAppState()
@@ -24,13 +51,22 @@ export function ScriptureLookup() {
   // A text chosen for another tradition no longer applies.
   const work = chosenWork && works.includes(chosenWork) ? chosenWork : works[0]
 
-  async function submit(event?: FormEvent, text = reference) {
+  const reader = useReadAloud()
+  const { stop: stopReading, read } = reader
+  // Counts searches and tradition changes, so a reply that arrives late isn't read over them.
+  const searchRef = useRef(0)
+
+  async function submit(event?: FormEvent, text = reference, { speak = false } = {}) {
     event?.preventDefault()
     if (!text.trim() || loading) return
+    const search = ++searchRef.current
+    stopReading()
     setLoading(true)
     setError(null)
     try {
-      setResult({ faith, reading: await readPassage(faith, language, work, text.trim()) })
+      const reading = await readPassage(faith, language, work, text.trim())
+      setResult({ faith, language, reading })
+      if (speak && search === searchRef.current && !document.hidden) read(spokenReading(reading, language), language)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -43,10 +79,33 @@ export function ScriptureLookup() {
     language,
     onPhrase: (text) => {
       setReference(text)
-      void submit(undefined, text)
+      void submit(undefined, text, { speak: true })
     },
   })
   const listening = dictation.status !== "idle"
+  const { stop: stopDictation } = dictation
+
+  const releaseVoice = useCallback(() => {
+    searchRef.current++
+    stopDictation()
+    stopReading()
+  }, [stopDictation, stopReading])
+
+  useEffect(() => releaseVoice, [faith, language, releaseVoice])
+
+  function startDictation() {
+    stopReading()
+    claimVoice(releaseVoice)
+    // Inside the tap: the reply is read later, and phones only allow that once unlocked.
+    reader.unlock()
+    void dictation.start()
+  }
+
+  function listen(current: Result) {
+    claimVoice(releaseVoice)
+    reader.unlock()
+    read(spokenReading(current.reading, current.language), current.language)
+  }
 
   return (
     <Section title="Read a Passage" eyebrow="From the source">
@@ -95,7 +154,7 @@ export function ScriptureLookup() {
             aria-label={listening ? "Stop listening" : "Search by voice"}
             aria-pressed={listening}
             disabled={loading}
-            onClick={() => (listening ? dictation.stop() : void dictation.start())}
+            onClick={() => (listening ? dictation.stop() : startDictation())}
             className={`absolute top-1/2 right-11.5 flex size-9 -translate-y-1/2 items-center justify-center rounded-full disabled:opacity-40 ${
               listening ? "bg-(--accent) text-paper" : "text-muted hover:text-ink"
             }`}
@@ -135,17 +194,40 @@ export function ScriptureLookup() {
           {result.reading.explanation && (
             <p className="mx-auto mt-8 max-w-xl text-left font-serif text-xl leading-relaxed text-ink/90">{result.reading.explanation}</p>
           )}
-          <SaveButton
-            key={result.reading.passage.reference}
-            onSave={() =>
-              saveItem({
-                faith: result.faith,
-                type: "scripture",
-                title: result.reading.passage.reference,
-                content: `“${result.reading.passage.text}”\n— ${result.reading.passage.translation}\n\n${result.reading.explanation}`,
-              })
-            }
-          />
+          <div className="flex items-center justify-center gap-5">
+            <button
+              type="button"
+              aria-pressed={reader.status !== "idle"}
+              onClick={() => (reader.status === "idle" ? listen(result) : reader.stop())}
+              className="relative mt-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-(--accent)"
+            >
+              {reader.status === "idle" ? (
+                <Volume2 aria-hidden className="size-4" />
+              ) : (
+                <span aria-hidden className="relative flex size-4 items-center justify-center text-(--accent)">
+                  <span className="breathe absolute inset-0 rounded-full bg-(--accent)" />
+                  <Square className="relative size-2.5 fill-current" />
+                </span>
+              )}
+              {reader.status === "idle" ? "Listen" : "Stop"}
+            </button>
+            <SaveButton
+              key={result.reading.passage.reference}
+              onSave={() =>
+                saveItem({
+                  faith: result.faith,
+                  type: "scripture",
+                  title: result.reading.passage.reference,
+                  content: `“${result.reading.passage.text}”\n— ${result.reading.passage.translation}\n\n${result.reading.explanation}`,
+                })
+              }
+            />
+          </div>
+          {reader.error && (
+            <p role="status" className="mt-3 text-sm text-danger">
+              {reader.error} The text is still here to read.
+            </p>
+          )}
         </div>
       )}
     </Section>

@@ -8,13 +8,34 @@ import type { Language } from "@/lib/faiths"
 const SENTENCE_END = /[.!?…]+["')\]]*\s+/g
 // Very short sentences ("Oh no.") are merged with the next so we make fewer requests.
 const MIN_CHUNK = 40
+// The most /api/voice/speak accepts at once.
+const MAX_CHUNK = 600
+// Chunks synthesised ahead of the one playing. Enough to keep speech smooth; the rest
+// wait, so a long text doesn't hit the provider all at once or get paid for if stopped.
+const LOOKAHEAD = 2
 
 // A tiny silent WAV, played inside the user's click to unlock audio in Safari.
 const SILENCE =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
 
+/** Splits text over MAX_CHUNK, preferring a clause break, then a word break. */
+function splitLong(text: string): string[] {
+  const chunks: string[] = []
+  let rest = text.trim()
+  while (rest.length > MAX_CHUNK) {
+    const head = rest.slice(0, MAX_CHUNK)
+    const clause = Math.max(...[", ", "; ", ": ", "— "].map((mark) => head.lastIndexOf(mark)))
+    const cut = clause > MAX_CHUNK / 3 ? clause + 1 : head.lastIndexOf(" ") > 0 ? head.lastIndexOf(" ") : MAX_CHUNK
+    chunks.push(rest.slice(0, cut).trim())
+    rest = rest.slice(cut).trim()
+  }
+  if (rest) chunks.push(rest)
+  return chunks
+}
+
 export class SpeechQueue {
   private buffer = ""
+  private waiting: string[] = []
   private pending: Promise<Blob | null>[] = []
   private playing = false
   private controller = new AbortController()
@@ -69,6 +90,7 @@ export class SpeechQueue {
     this.controller.abort()
     this.controller = new AbortController()
     this.pending = []
+    this.waiting = []
     this.buffer = ""
     this.replyComplete = false
     this.audio?.pause()
@@ -77,21 +99,31 @@ export class SpeechQueue {
   }
 
   private enqueue(text: string) {
+    this.waiting.push(...splitLong(text))
+    this.fetchAhead()
+    void this.pump(this.controller.signal)
+  }
+
+  private fetchAhead() {
     const signal = this.controller.signal
-    const request = fetch("/api/voice/speak", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.trim().slice(0, 600), language: this.language }),
-      signal,
-    }).then(async (res) => {
-      if (res.status === 204) return null
-      if (!res.ok) throw new Error("Couldn't play the spoken reply.")
-      return res.blob()
-    })
-    // Avoid unhandled rejections for requests aborted by stop().
-    request.catch(() => {})
-    this.pending.push(request)
-    void this.pump(signal)
+    while (this.pending.length < LOOKAHEAD && this.waiting.length > 0) {
+      const request = fetch("/api/voice/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: this.waiting.shift(), language: this.language }),
+        signal,
+      }).then(async (res) => {
+        if (res.status === 204) return null
+        if (!res.ok) {
+          const data = await res.json().catch(() => null)
+          throw new Error(data?.error || "Couldn't play the spoken reply.")
+        }
+        return res.blob()
+      })
+      // Avoid unhandled rejections for requests aborted by stop().
+      request.catch(() => {})
+      this.pending.push(request)
+    }
   }
 
   private async pump(signal: AbortSignal) {
@@ -99,7 +131,9 @@ export class SpeechQueue {
     this.playing = true
     try {
       while (this.pending.length > 0 && !signal.aborted) {
-        const blob = await this.pending.shift()!
+        const next = this.pending.shift()!
+        this.fetchAhead()
+        const blob = await next
         if (!blob || signal.aborted) continue
         await this.play(blob, signal)
       }
